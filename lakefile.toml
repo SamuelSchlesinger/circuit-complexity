@@ -1,0 +1,10 @@
+name = "circ"
+version = "0.1.0"
+defaultTargets = ["Circ"]
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+
+[[lean_lib]]
+name = "Circ"
