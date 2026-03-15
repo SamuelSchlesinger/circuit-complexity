@@ -1,6 +1,7 @@
 import Circ.Basic
 import Circ.AON
 import Circ.Shannon
+import Circ.Schnorr
 
 /-! # Bridge: Shannon Lower Bound for Circuits
 
@@ -278,3 +279,21 @@ theorem shannon_lower_bound_circuit (N : Nat) [NeZero N] (hN : 6 ≤ N) :
     have h2 : (fun x => (c.eval x) 0) = evalD hG1 d := circuit_eval_eq_evalD c
     have h3 : evalD hspos d' = f := by rw [h1, ← h2, habs]
     exact hf d' h3⟩
+
+/-! ## Schnorr Bridge -/
+
+/-- **Schnorr's lower bound for circuits**: any fan-in-2 AND/OR circuit
+    computing XOR_N (or its complement) has at least 2(N-1) internal gates,
+    i.e., G + 1 (total gates including output) ≥ 2N - 1. -/
+theorem schnorr_lower_bound_circuit (N G : Nat) [NeZero N]
+    (c : Circuit Basis.andOr2 N 1 G) (comp : Bool)
+    (heval : ∀ x, (c.eval x) 0 = comp.xor (Schnorr.xorBool N x))
+    (hN : 1 ≤ N) : G + 2 ≥ 2 * N := by
+  have hG1 : 0 < G + 1 := Nat.succ_pos G
+  have h := circuit_eval_eq_evalD c
+  have heval' : ∀ x, evalD hG1 (circuitToDesc c) x = comp.xor (Schnorr.xorBool N x) := by
+    intro x
+    have := congr_fun h x
+    rw [← this]
+    exact heval x
+  exact Schnorr.xor_lower_bound_2 N (G + 1) hG1 (circuitToDesc c) comp heval' hN
