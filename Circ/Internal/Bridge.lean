@@ -1,39 +1,17 @@
-import Circ.Basic
-import Circ.AON
-import Circ.Shannon
-import Circ.Schnorr
+import Circ.AON.Defs
+import Circ.Internal.CircDesc
+import Circ.Internal.Schnorr
 
-/-! # Bridge: Shannon Lower Bound for Circuits
+/-! # Internal: Bridge from CircDesc to Circuit Model
 
-This file connects the `CircDesc` counting model to the general `Circuit` model
-by defining a fan-in-2 AND/OR basis and proving that circuits over it encode
-faithfully into circuit descriptors.
+This internal module connects the `CircDesc` counting model to the general
+`Circuit` model by proving that circuits over `Basis.andOr2` encode faithfully
+into circuit descriptors.
 
-## Main results
-
-* `shannon_lower_bound_circuit` — for N ≥ 6, there exists a Boolean function
-  requiring more than 2^N/(5N) gates in any fan-in-2 AND/OR circuit.
+The public theorems `shannon_lower_bound_circuit` and
+`schnorr_lower_bound_circuit` are accessible through `Circ.Shannon` and
+`Circ.Schnorr` respectively.
 -/
-
-/-! ## Fan-in-2 AND/OR Basis -/
-
-/-- Fan-in-2 AND/OR basis. Every gate has exactly 2 inputs.
-    Negation is free (per-input flags on gates). -/
-def Basis.andOr2 : Basis where
-  Op := AONOp
-  arity _ := .exactly 2
-  eval op n _ inputs := op.eval n inputs
-
-/-- Every gate over `Basis.andOr2` has fan-in exactly 2. -/
-theorem andOr2_fanIn {W : Nat} (g : Gate Basis.andOr2 W) : g.fanIn = 2 := g.arityOk
-
-theorem AONOp.eval_two_and (inputs : BitString 2) :
-    AONOp.eval .and 2 inputs = (inputs 0 && inputs 1) := by
-  simp [AONOp.eval, Fin.foldl_succ_last, Fin.foldl_zero]
-
-theorem AONOp.eval_two_or (inputs : BitString 2) :
-    AONOp.eval .or 2 inputs = (inputs 0 || inputs 1) := by
-  simp [AONOp.eval, Fin.foldl_succ_last, Fin.foldl_zero]
 
 /-! ## Encoding -/
 
@@ -149,25 +127,13 @@ theorem circuit_eval_eq_evalD {N G : Nat} [NeZero N]
     (c : Circuit Basis.andOr2 N 1 G) :
     (fun x => (c.eval x) 0) = evalD (Nat.succ_pos G) (circuitToDesc c) := by
   funext x
-  -- LHS: (c.outputs 0).eval (c.wireValue x)
-  -- RHS: wireValD (circuitToDesc c) x ⟨N + G, _⟩
-  -- Both sides equal via gate_eval_eq_slot + wireValue_eq_wireValD
-  -- Strategy: show LHS = encodeGate (c.outputs 0) applied to wireValD = RHS
   simp only [Circuit.eval, evalD]
-  -- LHS is (c.outputs 0).eval (c.wireValue x)
-  -- RHS is wireValD (circuitToDesc c) x ⟨N + s - 1, _⟩ where s = G+1
-  -- Use gate_eval_eq_slot for LHS
   rw [gate_eval_eq_slot (c.outputs 0) (by omega : N + G ≤ N + (G + 1))
     (c.wireValue x) _ (fun w => wireValue_eq_wireValD c x w)]
-  -- Now LHS is encodeGate (c.outputs 0) applied with wireValD
-  -- RHS is wireValD at position N+G which unfolds to the same thing
-  -- via circuitToDesc at index G (the else branch = encodeGate (c.outputs 0))
   conv_rhs => unfold wireValD
   simp only []
-  -- Simplify the circuitToDesc lookup: N + G.succ - 1 - N = G, which is not < G
   simp only [circuitToDesc, show ¬((⟨N + G.succ - 1 - N, (by omega : N + G.succ - 1 - N < G + 1)⟩ :
     Fin (G + 1)).val < G) from by simp, dite_false]
-  -- Input wire guards: the output gate inputs are Fin (N+G) values, so < N+(G+1)-1 = N+G
   have h2 := andOr2_fanIn (c.outputs 0)
   simp only [encodeGate, Fin.val_mk,
     show ((c.outputs 0).inputs ⟨0, by omega⟩).val < N + G.succ - 1 from by
@@ -175,7 +141,6 @@ theorem circuit_eval_eq_evalD {N G : Nat} [NeZero N]
     show ((c.outputs 0).inputs ⟨1, by omega⟩).val < N + G.succ - 1 from by
       exact Nat.lt_of_lt_of_le ((c.outputs 0).inputs ⟨1, by omega⟩).isLt (by omega),
     ite_true]
-  -- Remaining: outer `if h : N + G.succ - 1 < N` in RHS
   simp only [show ¬(N + G.succ - 1 < N) from by omega, dite_false]
 
 /-! ## Padding -/
@@ -210,13 +175,6 @@ private theorem wireValD_padDesc_lt {N s s' : Nat} (d : CircDesc N s) (hs : 0 < 
     simp only [show ¬(w.val < N) from by omega, dite_false]
     -- Both sides look up the gate at index w.val - N
     simp only [padDesc, show (w.val - N) < s from hi, dite_true]
-    -- The padDesc returns the same gate data (with Fin adjusted)
-    -- After dsimp, both sides should compute the same gate
-    -- Both sides differ only in wireValD (padDesc ...) vs wireValD d
-    -- Use congr to reduce to showing equality of the wireValD calls
-    -- Both sides have the same structure; the only difference is
-    -- wireValD (padDesc d s' hs h) vs wireValD d in the recursive positions.
-    -- Apply the IH for both input wires (which are < N + s since they're Fin (N+s) values)
     have hw1 : (d ⟨↑w - N, hi⟩).2.1.1.val < N + s := (d ⟨↑w - N, hi⟩).2.1.1.isLt
     have hw2 : (d ⟨↑w - N, hi⟩).2.1.2.val < N + s := (d ⟨↑w - N, hi⟩).2.1.2.isLt
     congr 1 <;> (congr 1 <;> (first | rfl | (congr 1; split_ifs with hlt <;> (
@@ -247,8 +205,6 @@ theorem evalD_padDesc {N s s' : Nat} (d : CircDesc N s) (hs : 0 < s)
     evalD hs' (padDesc d s' hs h) = evalD hs d := by
   funext x
   simp only [evalD]
-  -- evalD hs' (padDesc ...) x = wireValD (padDesc ...) x ⟨N+s'-1, _⟩
-  -- evalD hs d x = wireValD d x ⟨N+s-1, _⟩
   by_cases hsle : N + s ≤ N + s' - 1
   · -- s < s': the last wire is in the padded region
     rw [wireValD_padDesc_ge d hs h x ⟨N + s' - 1, by omega⟩ (by omega)]
@@ -258,7 +214,7 @@ theorem evalD_padDesc {N s s' : Nat} (d : CircDesc N s) (hs : 0 < s)
     subst this
     exact wireValD_padDesc_lt d hs h x ⟨N + s - 1, by omega⟩ (by omega)
 
-/-! ## Main Theorem -/
+/-! ## Main Theorems -/
 
 /-- **Shannon lower bound for circuits**: for N ≥ 6, there exists a Boolean
     function on N inputs that cannot be computed by any fan-in-2 AND/OR
@@ -278,8 +234,6 @@ theorem shannon_lower_bound_circuit (N : Nat) [NeZero N] (hN : 6 ≤ N) :
     have h2 : (fun x => (c.eval x) 0) = evalD hG1 d := circuit_eval_eq_evalD c
     have h3 : evalD hspos d' = f := by rw [h1, ← h2, habs]
     exact hf d' h3⟩
-
-/-! ## Schnorr Bridge -/
 
 /-- **Schnorr's lower bound for circuits**: any fan-in-2 AND/OR circuit
     computing XOR_N (or its complement) has at least 2(N-1) internal gates,

@@ -131,28 +131,62 @@ class CompleteBasis (B : Basis) : Prop where
   complete : ∀ {N M} [NeZero N] [NeZero M] (f : BitString N → BitString M),
     ∃ G, ∃ c : Circuit B N M G, c.eval = f
 
-namespace Circuit
-variable {B : Basis} {N M : Nat} [NeZero N] [NeZero M]
+/-- If every circuit over `B₁` can be simulated by a circuit over `B₂`
+    (possibly with a different number of internal gates), then completeness
+    of `B₁` implies completeness of `B₂`.
 
-/-- The minimum size circuit over basis `B` computing a given function.
-    Returns 0 if no circuit over `B` computes `f`. -/
+    This is the generic tool for proving new bases complete: show you can
+    compile each gate of a known-complete basis into a subcircuit of the
+    new basis. -/
+theorem CompleteBasis.of_simulation (B₁ B₂ : Basis) [CompleteBasis B₁]
+    (sim : ∀ {N M G} [NeZero N] [NeZero M] (c : Circuit B₁ N M G),
+      ∃ G', ∃ c' : Circuit B₂ N M G', c'.eval = c.eval)
+    : CompleteBasis B₂ where
+  complete f := by
+    obtain ⟨G, c, hc⟩ := CompleteBasis.complete (B := B₁) f
+    obtain ⟨G', c', hc'⟩ := sim c
+    exact ⟨G', c', hc'.trans hc⟩
+
+namespace Circuit
+variable {B : Basis} {N : Nat} [NeZero N]
+
+/-- The minimum circuit size over basis `B` computing a Boolean function `f`.
+
+A single-output circuit `Circuit B N 1 G` computes `f` when
+`(fun x => (c.eval x) 0) = f`. The size is `G + 1` (internal gates +
+output gate). Returns 0 if no circuit over `B` computes `f`. -/
 noncomputable def size_complexity
-    (B : Basis) (f : BitString N → BitString M) : Nat :=
-  sInf {s | ∃ G, ∃ c : Circuit B N M G, c.size = s ∧ c.eval = f}
+    (B : Basis) (f : BitString N → Bool) : Nat :=
+  sInf {s | ∃ G, ∃ c : Circuit B N 1 G, c.size = s ∧ (fun x => (c.eval x) 0) = f}
 
 private theorem size_complexity_set_nonempty [CompleteBasis B]
-    (f : BitString N → BitString M) :
-    {s | ∃ G, ∃ c : Circuit B N M G, c.size = s ∧ c.eval = f}.Nonempty :=
-  let ⟨G, c, hc⟩ := CompleteBasis.complete (B := B) f
-  ⟨c.size, G, c, rfl, hc⟩
+    (f : BitString N → Bool) :
+    {s | ∃ G, ∃ c : Circuit B N 1 G, c.size = s ∧ (fun x => (c.eval x) 0) = f}.Nonempty := by
+  obtain ⟨G, c, hc⟩ := CompleteBasis.complete (B := B) (fun x => (fun _ : Fin 1 => f x))
+  refine ⟨c.size, G, c, rfl, ?_⟩
+  funext x; have := congr_fun (congr_fun hc x) 0; exact this
 
 /-- For a complete basis, circuit size complexity is always positive. -/
 theorem size_complexity_pos [CompleteBasis B]
-    (f : BitString N → BitString M) :
+    (f : BitString N → Bool) :
     0 < size_complexity B f := by
   obtain ⟨_, _, hs, _⟩ := Nat.sInf_mem (size_complexity_set_nonempty (B := B) f)
   simp only [size_complexity]
   rw [← hs, size]
-  exact Nat.add_pos_right _ (Nat.pos_of_ne_zero (NeZero.ne M))
+  omega
+
+/-- Any circuit computing `f` has size at least `size_complexity B f`. -/
+theorem size_complexity_le {G : Nat}
+    (c : Circuit B N 1 G) (f : BitString N → Bool)
+    (hf : (fun x => (c.eval x) 0) = f) :
+    size_complexity B f ≤ c.size :=
+  Nat.sInf_le ⟨G, c, rfl, hf⟩
+
+/-- For a complete basis, `size_complexity` is realized by some circuit. -/
+theorem size_complexity_witness [CompleteBasis B]
+    (f : BitString N → Bool) :
+    ∃ G, ∃ c : Circuit B N 1 G,
+      c.size = size_complexity B f ∧ (fun x => (c.eval x) 0) = f :=
+  Nat.sInf_mem (size_complexity_set_nonempty (B := B) f)
 
 end Circuit
