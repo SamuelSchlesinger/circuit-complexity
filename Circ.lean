@@ -1,4 +1,5 @@
 import Circ.Basic
+import Circ.NF
 import Circ.AON
 import Circ.XOR
 import Circ.EssentialInput
@@ -43,6 +44,8 @@ Public modules (definitions a reviewer should read):
 
 * `Circ.Basic` — `Circuit`, `Basis`, `Gate`, `CompleteBasis`, `size_complexity`
 * `Circ.AON.Defs` — `AONOp`, `Basis.unboundedAON`, `Basis.boundedAON`, `Basis.andOr2`
+* `Circ.NF` — `Literal`, `CNF`, `DNF`, `CNF.complexity`, `DNF.complexity`,
+  `CNF.toCircuit`, `DNF.toCircuit`
 * `Circ.XOR` — `Schnorr.xorBool` (N-input parity)
 * `Circ.EssentialInput` — `IsEssentialInput`, `EssentialInputs`
 
