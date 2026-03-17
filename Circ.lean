@@ -38,14 +38,18 @@ is the minimum size of any circuit computing it.
   Any fan-in-2 AND/OR circuit computing N-input XOR (or its complement)
   requires at least `2(N − 1)` internal gates.
 
+* **CNF/DNF lower bound for XOR** (`DNF.xorBool_complexity_lb`,
+  `CNF.xorBool_complexity_lb`): Any DNF (resp. CNF) computing N-input XOR
+  requires at least `2^{N-1}` terms (resp. clauses).
+
 ## Module structure
 
 Public modules (definitions a reviewer should read):
 
 * `Circ.Basic` — `Circuit`, `Basis`, `Gate`, `CompleteBasis`, `size_complexity`
 * `Circ.AON.Defs` — `AONOp`, `Basis.unboundedAON`, `Basis.boundedAON`, `Basis.andOr2`
-* `Circ.NF` — `Literal`, `CNF`, `DNF`, `CNF.complexity`, `DNF.complexity`,
-  `CNF.toCircuit`, `DNF.toCircuit`
+* `Circ.NF.Defs` — `Literal`, `CNF`, `DNF`, `CNF.complexity`, `DNF.complexity`
+* `Circ.NF` — CNF/DNF lower bound for XOR (`xorBool_complexity_lb`)
 * `Circ.XOR` — `Schnorr.xorBool` (N-input parity)
 * `Circ.EssentialInput` — `IsEssentialInput`, `EssentialInputs`
 
