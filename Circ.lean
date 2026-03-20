@@ -6,6 +6,7 @@ import Circ.EssentialInput
 import Circ.Shannon
 import Circ.LowerBound
 import Circ.Schnorr
+import Circ.Lupanov
 
 /-! # Circuit Complexity Library
 
