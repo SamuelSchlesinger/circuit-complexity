@@ -8,9 +8,13 @@ establishes the circuit size complexity measure for Boolean functions.
 ## Main definitions
 
 * `BitString` — a string of bits of a specific length
+* `BoolFunFamily` — a family of Boolean functions indexed by input length
 * `Basis` — a basis of Boolean operations with arity constraints
 * `Circuit` — an acyclic Boolean circuit (well-formedness by construction)
 * `CompleteBasis` — typeclass for functionally complete bases
+* `Circuit.wireDepth` — depth of a wire in the circuit DAG
+* `Circuit.outputDepth` — depth of a single output gate
+* `Circuit.depth` — depth of a (possibly multi-output) circuit
 * `Circuit.size_complexity` — minimum circuit size computing a given function
 
 ## Main results
@@ -20,6 +24,11 @@ establishes the circuit size complexity measure for Boolean functions.
 
 /-- A BitString of length `n`. -/
 abbrev BitString n := Fin n → Bool
+
+/-- A family of Boolean functions indexed by input length `N`.
+
+Each member maps `N`-bit strings to a single output bit. -/
+abbrev BoolFunFamily := (N : Nat) → BitString N → Bool
 
 /-- Arity constraint for operations in a basis. -/
 inductive Arity where
@@ -116,6 +125,49 @@ theorem wireValue_ge (c : Circuit B N M G) (input : BitString N)
   unfold wireValue
   simp only [h, dite_false]
   rfl
+
+/-- Depth of wire `w` in the circuit DAG.
+
+Primary inputs have depth 0. Wire `N + i` (internal gate `i`) has depth
+`1 + max over input wires`. -/
+def wireDepth (c : Circuit B N M G) (w : Fin (N + G)) : Nat :=
+  if h : w.val < N then
+    0
+  else
+    have hG : w.val - N < G := by omega
+    let gate := c.gates ⟨w.val - N, hG⟩
+    1 + Fin.foldl gate.fanIn (fun acc k => max acc (c.wireDepth (gate.inputs k))) 0
+termination_by w.val
+decreasing_by
+  have hacyc := c.acyclic ⟨w.val - N, hG⟩ k
+  have : (⟨w.val - N, hG⟩ : Fin G).val = w.val - N := rfl
+  omega
+
+/-- Primary input wires (index < N) have depth 0. -/
+@[simp] theorem inputWireDepth (c : Circuit B N M G)
+    (w : Fin (N + G)) (h : w.val < N) :
+    c.wireDepth w = 0 := by
+  unfold wireDepth; simp [h]
+
+/-- Internal gate wires (index ≥ N) have depth 1 + max over their input wires.
+Unfolds one step of `wireDepth` for the gate case. -/
+theorem gateWireDepth (c : Circuit B N M G)
+    (w : Fin (N + G)) (h : ¬ (w.val < N)) :
+    c.wireDepth w =
+      1 + Fin.foldl (c.gates ⟨w.val - N, by omega⟩).fanIn
+        (fun acc k => max acc (c.wireDepth ((c.gates ⟨w.val - N, by omega⟩).inputs k))) 0 := by
+  conv_lhs => unfold wireDepth
+  simp only [h, dite_false]
+
+/-- Depth contributed by a single output gate: one layer for the gate itself
+plus the maximum `wireDepth` of its inputs. Always ≥ 1. -/
+def outputDepth (c : Circuit B N M G) (j : Fin M) : Nat :=
+  let outGate := c.outputs j
+  1 + Fin.foldl outGate.fanIn (fun acc k => max acc (c.wireDepth (outGate.inputs k))) 0
+
+/-- Depth of a circuit: the maximum `outputDepth` over all output gates. -/
+def depth (c : Circuit B N M G) : Nat :=
+  Fin.foldl M (fun acc j => max acc (c.outputDepth j)) 0
 
 /-- Evaluate a circuit: map an `N`-bit input to an `M`-bit output. -/
 def eval (c : Circuit B N M G) (input : BitString N) : BitString M :=
