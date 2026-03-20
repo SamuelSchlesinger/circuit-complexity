@@ -162,47 +162,35 @@ where
 Literals have depth 0. An AND/OR node has depth 1 + max of children depths. -/
 def depth : ACNF N b → Nat
   | .lit _ => 0
-  | .and children => 1 + depthAll children
-  | .or children => 1 + depthAny children
+  | .and children => 1 + depthList children
+  | .or children => 1 + depthList children
 where
-  /-- Maximum depth across AND children. -/
-  depthAll : List (ACNF N false) → Nat
+  /-- Maximum depth across a list of ACNF children. -/
+  depthList {b' : Bool} : List (ACNF N b') → Nat
     | [] => 0
-    | c :: cs => max c.depth (depthAll cs)
-  /-- Maximum depth across OR children. -/
-  depthAny : List (ACNF N true) → Nat
-    | [] => 0
-    | c :: cs => max c.depth (depthAny cs)
+    | c :: cs => max c.depth (depthList cs)
 
 /-- The number of internal (AND/OR) nodes. -/
 def size : ACNF N b → Nat
   | .lit _ => 0
-  | .and children => 1 + sizeAll children
-  | .or children => 1 + sizeAny children
+  | .and children => 1 + sizeList children
+  | .or children => 1 + sizeList children
 where
-  /-- Sum of sizes across AND children. -/
-  sizeAll : List (ACNF N false) → Nat
+  /-- Sum of sizes across a list of ACNF children. -/
+  sizeList {b' : Bool} : List (ACNF N b') → Nat
     | [] => 0
-    | c :: cs => c.size + sizeAll cs
-  /-- Sum of sizes across OR children. -/
-  sizeAny : List (ACNF N true) → Nat
-    | [] => 0
-    | c :: cs => c.size + sizeAny cs
+    | c :: cs => c.size + sizeList cs
 
 /-- The number of literal leaves. -/
 def leafCount : ACNF N b → Nat
   | .lit _ => 1
-  | .and children => leafCountAll children
-  | .or children => leafCountAny children
+  | .and children => leafCountList children
+  | .or children => leafCountList children
 where
-  /-- Sum of leaf counts across AND children. -/
-  leafCountAll : List (ACNF N false) → Nat
+  /-- Sum of leaf counts across a list of ACNF children. -/
+  leafCountList {b' : Bool} : List (ACNF N b') → Nat
     | [] => 0
-    | c :: cs => c.leafCount + leafCountAll cs
-  /-- Sum of leaf counts across OR children. -/
-  leafCountAny : List (ACNF N true) → Nat
-    | [] => 0
-    | c :: cs => c.leafCount + leafCountAny cs
+    | c :: cs => c.leafCount + leafCountList cs
 
 /-! ## Flattening helpers for direct circuit conversion -/
 

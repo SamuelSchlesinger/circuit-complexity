@@ -518,31 +518,18 @@ theorem evalAny_append (l₁ l₂ : List (ACNF N true)) (x : BitString N) :
   | nil => simp [eval.evalAny]
   | cons c cs ih => simp only [List.cons_append, eval.evalAny, ih, Bool.or_assoc]
 
-theorem depthAll_append (l₁ l₂ : List (ACNF N false)) :
-    depth.depthAll (l₁ ++ l₂) = max (depth.depthAll l₁) (depth.depthAll l₂) := by
+theorem depthList_append (l₁ l₂ : List (ACNF N b)) :
+    depth.depthList (l₁ ++ l₂) = max (depth.depthList l₁) (depth.depthList l₂) := by
   induction l₁ with
-  | nil => simp [depth.depthAll]
-  | cons c cs ih => simp only [List.cons_append, depth.depthAll, ih, Nat.max_assoc]
+  | nil => simp [depth.depthList]
+  | cons c cs ih => simp only [List.cons_append, depth.depthList, ih, Nat.max_assoc]
 
-theorem depthAny_append (l₁ l₂ : List (ACNF N true)) :
-    depth.depthAny (l₁ ++ l₂) = max (depth.depthAny l₁) (depth.depthAny l₂) := by
+theorem leafCountList_append (l₁ l₂ : List (ACNF N b)) :
+    leafCount.leafCountList (l₁ ++ l₂) =
+    leafCount.leafCountList l₁ + leafCount.leafCountList l₂ := by
   induction l₁ with
-  | nil => simp [depth.depthAny]
-  | cons c cs ih => simp only [List.cons_append, depth.depthAny, ih, Nat.max_assoc]
-
-theorem leafCountAll_append (l₁ l₂ : List (ACNF N false)) :
-    leafCount.leafCountAll (l₁ ++ l₂) =
-    leafCount.leafCountAll l₁ + leafCount.leafCountAll l₂ := by
-  induction l₁ with
-  | nil => simp [leafCount.leafCountAll]
-  | cons c cs ih => simp only [List.cons_append, leafCount.leafCountAll, ih]; omega
-
-theorem leafCountAny_append (l₁ l₂ : List (ACNF N true)) :
-    leafCount.leafCountAny (l₁ ++ l₂) =
-    leafCount.leafCountAny l₁ + leafCount.leafCountAny l₂ := by
-  induction l₁ with
-  | nil => simp [leafCount.leafCountAny]
-  | cons c cs ih => simp only [List.cons_append, leafCount.leafCountAny, ih]; omega
+  | nil => simp [leafCount.leafCountList]
+  | cons c cs ih => simp only [List.cons_append, leafCount.leafCountList, ih]; omega
 
 /-! ## Flatten correctness lemmas -/
 
@@ -560,33 +547,33 @@ theorem flattenForOr_evalAny (p : (b : Bool) × ACNF N b) (x : BitString N) :
   | ⟨_, .or children⟩ => simp [flattenForOr, eval]
   | ⟨_, .and children⟩ => simp [flattenForOr, eval.evalAny, eval]
 
-theorem flattenForAnd_depthAll (p : (b : Bool) × ACNF N b) :
-    depth.depthAll (flattenForAnd p) ≤ p.2.depth := by
+theorem flattenForAnd_depthList (p : (b : Bool) × ACNF N b) :
+    depth.depthList (flattenForAnd p) ≤ p.2.depth := by
   match p with
-  | ⟨_, .lit _⟩ => simp [flattenForAnd, depth.depthAll, depth]
+  | ⟨_, .lit _⟩ => simp [flattenForAnd, depth.depthList, depth]
   | ⟨_, .and children⟩ => simp [flattenForAnd, depth]
-  | ⟨_, .or children⟩ => simp [flattenForAnd, depth.depthAll, depth]
+  | ⟨_, .or children⟩ => simp [flattenForAnd, depth.depthList, depth]
 
-theorem flattenForOr_depthAny (p : (b : Bool) × ACNF N b) :
-    depth.depthAny (flattenForOr p) ≤ p.2.depth := by
+theorem flattenForOr_depthList (p : (b : Bool) × ACNF N b) :
+    depth.depthList (flattenForOr p) ≤ p.2.depth := by
   match p with
-  | ⟨_, .lit _⟩ => simp [flattenForOr, depth.depthAny, depth]
+  | ⟨_, .lit _⟩ => simp [flattenForOr, depth.depthList, depth]
   | ⟨_, .or children⟩ => simp [flattenForOr, depth]
-  | ⟨_, .and children⟩ => simp [flattenForOr, depth.depthAny, depth]
+  | ⟨_, .and children⟩ => simp [flattenForOr, depth.depthList, depth]
 
-theorem flattenForAnd_leafCountAll (p : (b : Bool) × ACNF N b) :
-    leafCount.leafCountAll (flattenForAnd p) = p.2.leafCount := by
+theorem flattenForAnd_leafCountList (p : (b : Bool) × ACNF N b) :
+    leafCount.leafCountList (flattenForAnd p) = p.2.leafCount := by
   match p with
-  | ⟨_, .lit _⟩ => simp [flattenForAnd, leafCount.leafCountAll, leafCount]
+  | ⟨_, .lit _⟩ => simp [flattenForAnd, leafCount.leafCountList, leafCount]
   | ⟨_, .and children⟩ => simp [flattenForAnd, leafCount]
-  | ⟨_, .or children⟩ => simp [flattenForAnd, leafCount.leafCountAll, leafCount]
+  | ⟨_, .or children⟩ => simp [flattenForAnd, leafCount.leafCountList, leafCount]
 
-theorem flattenForOr_leafCountAny (p : (b : Bool) × ACNF N b) :
-    leafCount.leafCountAny (flattenForOr p) = p.2.leafCount := by
+theorem flattenForOr_leafCountList (p : (b : Bool) × ACNF N b) :
+    leafCount.leafCountList (flattenForOr p) = p.2.leafCount := by
   match p with
-  | ⟨_, .lit _⟩ => simp [flattenForOr, leafCount.leafCountAny, leafCount]
+  | ⟨_, .lit _⟩ => simp [flattenForOr, leafCount.leafCountList, leafCount]
   | ⟨_, .or children⟩ => simp [flattenForOr, leafCount]
-  | ⟨_, .and children⟩ => simp [flattenForOr, leafCount.leafCountAny, leafCount]
+  | ⟨_, .and children⟩ => simp [flattenForOr, leafCount.leafCountList, leafCount]
 
 /-! ## flatMap bridge lemmas -/
 
@@ -606,41 +593,41 @@ theorem evalAny_flatMapForOr (ps : List ((b : Bool) × ACNF N b)) (x : BitString
     simp only [flatMapForOr, evalAny_append, ih, List.any_cons]
     rw [flattenForOr_evalAny]
 
-theorem depthAll_flatMapForAnd (ps : List ((b : Bool) × ACNF N b))
+theorem depthList_flatMapForAnd (ps : List ((b : Bool) × ACNF N b))
     (g : Nat) (h : ∀ p, p ∈ ps → p.2.depth ≤ g) :
-    depth.depthAll (flatMapForAnd ps) ≤ g := by
+    depth.depthList (flatMapForAnd ps) ≤ g := by
   induction ps with
-  | nil => simp [flatMapForAnd, depth.depthAll]
+  | nil => simp [flatMapForAnd, depth.depthList]
   | cons p ps ih =>
-    simp only [flatMapForAnd, depthAll_append]
+    simp only [flatMapForAnd, depthList_append]
     apply max_le_iff.mpr
     constructor
-    · exact Nat.le_trans (flattenForAnd_depthAll p) (h p (.head ps))
+    · exact Nat.le_trans (flattenForAnd_depthList p) (h p (.head ps))
     · exact ih (fun q hq => h q (.tail p hq))
 
-theorem depthAny_flatMapForOr (ps : List ((b : Bool) × ACNF N b))
+theorem depthList_flatMapForOr (ps : List ((b : Bool) × ACNF N b))
     (g : Nat) (h : ∀ p, p ∈ ps → p.2.depth ≤ g) :
-    depth.depthAny (flatMapForOr ps) ≤ g := by
+    depth.depthList (flatMapForOr ps) ≤ g := by
   induction ps with
-  | nil => simp [flatMapForOr, depth.depthAny]
+  | nil => simp [flatMapForOr, depth.depthList]
   | cons p ps ih =>
-    simp only [flatMapForOr, depthAny_append]
+    simp only [flatMapForOr, depthList_append]
     apply max_le_iff.mpr
     constructor
-    · exact Nat.le_trans (flattenForOr_depthAny p) (h p (.head ps))
+    · exact Nat.le_trans (flattenForOr_depthList p) (h p (.head ps))
     · exact ih (fun q hq => h q (.tail p hq))
 
-theorem leafCountAll_flatMapForAnd_cons (p : (b : Bool) × ACNF N b)
+theorem leafCountList_flatMapForAnd_cons (p : (b : Bool) × ACNF N b)
     (ps : List ((b : Bool) × ACNF N b)) :
-    leafCount.leafCountAll (flatMapForAnd (p :: ps)) =
-    p.2.leafCount + leafCount.leafCountAll (flatMapForAnd ps) := by
-  simp [flatMapForAnd, leafCountAll_append, flattenForAnd_leafCountAll]
+    leafCount.leafCountList (flatMapForAnd (p :: ps)) =
+    p.2.leafCount + leafCount.leafCountList (flatMapForAnd ps) := by
+  simp [flatMapForAnd, leafCountList_append, flattenForAnd_leafCountList]
 
-theorem leafCountAny_flatMapForOr_cons (p : (b : Bool) × ACNF N b)
+theorem leafCountList_flatMapForOr_cons (p : (b : Bool) × ACNF N b)
     (ps : List ((b : Bool) × ACNF N b)) :
-    leafCount.leafCountAny (flatMapForOr (p :: ps)) =
-    p.2.leafCount + leafCount.leafCountAny (flatMapForOr ps) := by
-  simp [flatMapForOr, leafCountAny_append, flattenForOr_leafCountAny]
+    leafCount.leafCountList (flatMapForOr (p :: ps)) =
+    p.2.leafCount + leafCount.leafCountList (flatMapForOr ps) := by
+  simp [flatMapForOr, leafCountList_append, flattenForOr_leafCountList]
 
 end ACNF
 
@@ -774,48 +761,48 @@ private theorem evalAny_ofFn_flatMapForOr (n : Nat)
     exact (foldl_or_init n (fun k => (f k.succ).2.eval x)
       ((f 0).2.eval x)).symm
 
-private theorem depthAll_ofFn_flatMapForAnd_le (n : Nat)
+private theorem depthList_ofFn_flatMapForAnd_le (n : Nat)
     (f : Fin n → (b : Bool) × ACNF N b) (g : Fin n → Nat)
     (h : ∀ k, (f k).2.depth ≤ g k) :
-    ACNF.depth.depthAll (ACNF.flatMapForAnd (List.ofFn f)) ≤
+    ACNF.depth.depthList (ACNF.flatMapForAnd (List.ofFn f)) ≤
     Fin.foldl n (fun acc k => max acc (g k)) 0 := by
-  apply ACNF.depthAll_flatMapForAnd
+  apply ACNF.depthList_flatMapForAnd
   intro p hp
   rw [List.mem_ofFn] at hp
   obtain ⟨k, rfl⟩ := hp
   exact Nat.le_trans (h k) (foldl_max_le_elem n g k)
 
-private theorem depthAny_ofFn_flatMapForOr_le (n : Nat)
+private theorem depthList_ofFn_flatMapForOr_le (n : Nat)
     (f : Fin n → (b : Bool) × ACNF N b) (g : Fin n → Nat)
     (h : ∀ k, (f k).2.depth ≤ g k) :
-    ACNF.depth.depthAny (ACNF.flatMapForOr (List.ofFn f)) ≤
+    ACNF.depth.depthList (ACNF.flatMapForOr (List.ofFn f)) ≤
     Fin.foldl n (fun acc k => max acc (g k)) 0 := by
-  apply ACNF.depthAny_flatMapForOr
+  apply ACNF.depthList_flatMapForOr
   intro p hp
   rw [List.mem_ofFn] at hp
   obtain ⟨k, rfl⟩ := hp
   exact Nat.le_trans (h k) (foldl_max_le_elem n g k)
 
-private theorem leafCountAll_ofFn_flatMapForAnd (n : Nat)
+private theorem leafCountList_ofFn_flatMapForAnd (n : Nat)
     (f : Fin n → (b : Bool) × ACNF N b) :
-    ACNF.leafCount.leafCountAll (ACNF.flatMapForAnd (List.ofFn f)) =
+    ACNF.leafCount.leafCountList (ACNF.flatMapForAnd (List.ofFn f)) =
     Fin.foldl n (fun acc k => acc + (f k).2.leafCount) 0 := by
   induction n with
-  | zero => simp [List.ofFn_zero, ACNF.flatMapForAnd, ACNF.leafCount.leafCountAll, Fin.foldl_zero]
+  | zero => simp [List.ofFn_zero, ACNF.flatMapForAnd, ACNF.leafCount.leafCountList, Fin.foldl_zero]
   | succ n ih =>
-    rw [List.ofFn_succ, ACNF.leafCountAll_flatMapForAnd_cons, ih]
+    rw [List.ofFn_succ, ACNF.leafCountList_flatMapForAnd_cons, ih]
     conv_rhs => rw [Fin.foldl_succ]; simp only [Nat.zero_add]
     exact (foldl_add_init n (fun k => (f k.succ).2.leafCount)
       ((f 0).2.leafCount)).symm
 
-private theorem leafCountAny_ofFn_flatMapForOr (n : Nat)
+private theorem leafCountList_ofFn_flatMapForOr (n : Nat)
     (f : Fin n → (b : Bool) × ACNF N b) :
-    ACNF.leafCount.leafCountAny (ACNF.flatMapForOr (List.ofFn f)) =
+    ACNF.leafCount.leafCountList (ACNF.flatMapForOr (List.ofFn f)) =
     Fin.foldl n (fun acc k => acc + (f k).2.leafCount) 0 := by
   induction n with
-  | zero => simp [List.ofFn_zero, ACNF.flatMapForOr, ACNF.leafCount.leafCountAny, Fin.foldl_zero]
+  | zero => simp [List.ofFn_zero, ACNF.flatMapForOr, ACNF.leafCount.leafCountList, Fin.foldl_zero]
   | succ n ih =>
-    rw [List.ofFn_succ, ACNF.leafCountAny_flatMapForOr_cons, ih]
+    rw [List.ofFn_succ, ACNF.leafCountList_flatMapForOr_cons, ih]
     conv_rhs => rw [Fin.foldl_succ]; simp only [Nat.zero_add]
     exact (foldl_add_init n (fun k => (f k.succ).2.leafCount)
       ((f 0).2.leafCount)).symm
@@ -889,9 +876,9 @@ theorem wireToACNF_depth_le (c : Circuit Basis.unboundedAON N 1 G)
     all_goals (
       apply Nat.add_le_add_left
       first
-      | exact depthAll_ofFn_flatMapForAnd_le _ _ _ fun k =>
+      | exact depthList_ofFn_flatMapForAnd_le _ _ _ fun k =>
           wireToACNF_depth_le c ((c.gates ⟨w.val - N, hG⟩).inputs k) _
-      | exact depthAny_ofFn_flatMapForOr_le _ _ _ fun k =>
+      | exact depthList_ofFn_flatMapForOr_le _ _ _ fun k =>
           wireToACNF_depth_le c ((c.gates ⟨w.val - N, hG⟩).inputs k) _)
 termination_by w.val
 decreasing_by
@@ -907,10 +894,10 @@ theorem toACNF_depth_le (c : Circuit Basis.unboundedAON N 1 G) :
   rcases (c.outputs 0).op with _ | _ <;>
     simp only [ACNF.depth]
   · exact Nat.add_le_add_left
-      (depthAll_ofFn_flatMapForAnd_le _ _ _ fun k =>
+      (depthList_ofFn_flatMapForAnd_le _ _ _ fun k =>
         wireToACNF_depth_le c ((c.outputs 0).inputs k) _) 1
   · exact Nat.add_le_add_left
-      (depthAny_ofFn_flatMapForOr_le _ _ _ fun k =>
+      (depthList_ofFn_flatMapForOr_le _ _ _ fun k =>
         wireToACNF_depth_le c ((c.outputs 0).inputs k) _) 1
 
 /-! ### Leaf count bound -/
@@ -933,8 +920,8 @@ theorem wireToACNF_leafCount_le (c : Circuit Basis.unboundedAON N 1 G)
       dsimp only [] <;> simp only [ACNF.leafCount]
     all_goals (
       first
-      | rw [leafCountAll_ofFn_flatMapForAnd]
-      | rw [leafCountAny_ofFn_flatMapForOr]
+      | rw [leafCountList_ofFn_flatMapForAnd]
+      | rw [leafCountList_ofFn_flatMapForOr]
       set D := Fin.foldl (c.gates ⟨w.val - N, hG⟩).fanIn
             (fun acc k => max acc (c.wireDepth ((c.gates ⟨w.val - N, hG⟩).inputs k))) 0
       have hD : ∀ k, c.wireDepth ((c.gates ⟨w.val - N, hG⟩).inputs k) ≤ D :=
@@ -973,8 +960,8 @@ theorem toACNF_leafCount_le (c : Circuit Basis.unboundedAON N 1 G) :
     (simp only []; simp only [ACNF.leafCount])
   all_goals (
     first
-    | rw [leafCountAll_ofFn_flatMapForAnd]
-    | rw [leafCountAny_ofFn_flatMapForOr]
+    | rw [leafCountList_ofFn_flatMapForAnd]
+    | rw [leafCountList_ofFn_flatMapForOr]
     set D := Fin.foldl (c.outputs 0).fanIn
           (fun acc k => max acc (c.wireDepth ((c.outputs 0).inputs k))) 0
     have hD : ∀ k, c.wireDepth ((c.outputs 0).inputs k) ≤ D :=
