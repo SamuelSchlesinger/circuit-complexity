@@ -117,6 +117,43 @@ theorem wireValue_ge (c : Circuit B N M G) (input : BitString N)
   simp only [h, dite_false]
   rfl
 
+/-- Depth of wire `w` in the circuit DAG.
+
+Primary inputs have depth 0. Wire `N + i` (internal gate `i`) has depth
+`1 + max over input wires`. -/
+def wireDepth (c : Circuit B N M G) (w : Fin (N + G)) : Nat :=
+  if h : w.val < N then
+    0
+  else
+    have hG : w.val - N < G := by omega
+    let gate := c.gates ⟨w.val - N, hG⟩
+    1 + Fin.foldl gate.fanIn (fun acc k => max acc (c.wireDepth (gate.inputs k))) 0
+termination_by w.val
+decreasing_by
+  have hacyc := c.acyclic ⟨w.val - N, hG⟩ k
+  have : (⟨w.val - N, hG⟩ : Fin G).val = w.val - N := rfl
+  omega
+
+@[simp] theorem wireDepth_lt (c : Circuit B N M G)
+    (w : Fin (N + G)) (h : w.val < N) :
+    c.wireDepth w = 0 := by
+  unfold wireDepth; simp [h]
+
+theorem wireDepth_ge (c : Circuit B N M G)
+    (w : Fin (N + G)) (h : ¬ (w.val < N)) :
+    c.wireDepth w =
+      1 + Fin.foldl (c.gates ⟨w.val - N, by omega⟩).fanIn
+        (fun acc k => max acc (c.wireDepth ((c.gates ⟨w.val - N, by omega⟩).inputs k))) 0 := by
+  conv_lhs => unfold wireDepth
+  simp only [h, dite_false]
+
+/-- Depth of a single-output circuit: the depth of the output gate.
+
+Always ≥ 1 since the output gate itself counts as one layer. -/
+def depth (c : Circuit B N 1 G) : Nat :=
+  let outGate := c.outputs 0
+  1 + Fin.foldl outGate.fanIn (fun acc k => max acc (c.wireDepth (outGate.inputs k))) 0
+
 /-- Evaluate a circuit: map an `N`-bit input to an `M`-bit output. -/
 def eval (c : Circuit B N M G) (input : BitString N) : BitString M :=
   fun j => (c.outputs j).eval (c.wireValue input)

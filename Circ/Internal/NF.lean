@@ -385,3 +385,619 @@ theorem DNF.flip_complexity_lb (φ : DNF N) (hN : 1 ≤ N)
     rw [show (φ.terms[φ.terms.findIdx (fun t => t.all (fun l => l.eval x₁))]'hlt₁) =
         (φ.terms[k]'hlt) from by congr 1] at sat₁
     exact huniq _ (List.getElem_mem ..) x₁ x₂ sat₁ sat₂
+
+/-! ## Circuit maxFanIn -/
+
+namespace Circuit
+
+/-- Maximum fan-in across all gates (internal + output) in a single-output circuit. -/
+def maxFanIn [NeZero N] (c : Circuit B N 1 G) : Nat :=
+  let internal := Fin.foldl G (fun acc i => max acc (c.gates i).fanIn) 0
+  max internal (c.outputs 0).fanIn
+
+end Circuit
+
+/-! ## Bridging: List.ofFn ↔ Fin.foldl -/
+
+section FoldlHelpers
+
+theorem foldl_and_init (n : Nat) (g : Fin n → Bool) (a : Bool) :
+    Fin.foldl n (fun acc k => acc && g k) a =
+    (a && Fin.foldl n (fun acc k => acc && g k) true) := by
+  induction n generalizing a with
+  | zero => simp [Fin.foldl_zero]
+  | succ n ih =>
+    simp only [Fin.foldl_succ, Bool.true_and]
+    rw [ih (fun k => g k.succ) (a && g 0)]
+    rw [ih (fun k => g k.succ) (g 0)]
+    simp [Bool.and_assoc]
+
+theorem foldl_or_init (n : Nat) (g : Fin n → Bool) (a : Bool) :
+    Fin.foldl n (fun acc k => acc || g k) a =
+    (a || Fin.foldl n (fun acc k => acc || g k) false) := by
+  induction n generalizing a with
+  | zero => simp [Fin.foldl_zero]
+  | succ n ih =>
+    simp only [Fin.foldl_succ, Bool.false_or]
+    rw [ih (fun k => g k.succ) (a || g 0)]
+    rw [ih (fun k => g k.succ) (g 0)]
+    simp [Bool.or_assoc]
+
+theorem foldl_max_init (n : Nat) (g : Fin n → Nat) (a : Nat) :
+    Fin.foldl n (fun acc k => max acc (g k)) a =
+    max a (Fin.foldl n (fun acc k => max acc (g k)) 0) := by
+  induction n generalizing a with
+  | zero => simp [Fin.foldl_zero]
+  | succ n ih =>
+    simp only [Fin.foldl_succ, Nat.zero_max]
+    rw [ih (fun k => g k.succ) (max a (g 0))]
+    rw [ih (fun k => g k.succ) (g 0)]
+    simp [Nat.max_assoc]
+
+theorem foldl_add_init (n : Nat) (g : Fin n → Nat) (a : Nat) :
+    Fin.foldl n (fun acc k => acc + g k) a =
+    a + Fin.foldl n (fun acc k => acc + g k) 0 := by
+  induction n generalizing a with
+  | zero => simp [Fin.foldl_zero]
+  | succ n ih =>
+    simp only [Fin.foldl_succ, Nat.zero_add]
+    rw [ih (fun k => g k.succ) (a + g 0)]
+    rw [ih (fun k => g k.succ) (g 0)]
+    omega
+
+theorem foldl_deMorgan_and (n : Nat) (f : Fin n → Bool) :
+    Fin.foldl n (fun acc k => acc || !f k) false =
+    !(Fin.foldl n (fun acc k => acc && f k) true) := by
+  induction n with
+  | zero => simp [Fin.foldl_zero]
+  | succ n ih =>
+    simp only [Fin.foldl_succ, Bool.true_and, Bool.false_or]
+    rw [foldl_or_init n (fun k => !(f k.succ)) (!(f 0))]
+    rw [ih (fun k => f k.succ)]
+    rw [foldl_and_init n (fun k => f k.succ) (f 0)]
+    simp [Bool.not_and]
+
+theorem foldl_deMorgan_or (n : Nat) (f : Fin n → Bool) :
+    Fin.foldl n (fun acc k => acc && !f k) true =
+    !(Fin.foldl n (fun acc k => acc || f k) false) := by
+  induction n with
+  | zero => simp [Fin.foldl_zero]
+  | succ n ih =>
+    simp only [Fin.foldl_succ, Bool.false_or, Bool.true_and]
+    rw [foldl_and_init n (fun k => !(f k.succ)) (!(f 0))]
+    rw [ih (fun k => f k.succ)]
+    rw [foldl_or_init n (fun k => f k.succ) (f 0)]
+    simp [Bool.not_or]
+
+end FoldlHelpers
+
+
+/-! ## ACNF eval helpers for map -/
+
+private theorem ACNF.evalAll_map {α : Type} (f : α → ACNF N false) (l : List α)
+    (x : BitString N) :
+    ACNF.eval.evalAll (l.map f) x = l.all (fun a => (f a).eval x) := by
+  induction l with
+  | nil => rfl
+  | cons a as ih => simp only [List.map, ACNF.eval.evalAll, List.all_cons, ih]
+
+private theorem ACNF.evalAny_map {α : Type} (f : α → ACNF N true) (l : List α)
+    (x : BitString N) :
+    ACNF.eval.evalAny (l.map f) x = l.any (fun a => (f a).eval x) := by
+  induction l with
+  | nil => rfl
+  | cons a as ih => simp only [List.map, ACNF.eval.evalAny, List.any_cons, ih]
+
+/-! ## ACNF list lemmas -/
+
+namespace ACNF
+
+variable {N : Nat}
+
+theorem evalAll_eq_all (cs : List (ACNF N false)) (x : BitString N) :
+    eval.evalAll cs x = cs.all (fun c => c.eval x) := by
+  induction cs with
+  | nil => rfl
+  | cons c cs ih => simp [eval.evalAll, List.all_cons, ih]
+
+theorem evalAny_eq_any (cs : List (ACNF N true)) (x : BitString N) :
+    eval.evalAny cs x = cs.any (fun c => c.eval x) := by
+  induction cs with
+  | nil => rfl
+  | cons c cs ih => simp [eval.evalAny, List.any_cons, ih]
+
+theorem evalAll_append (l₁ l₂ : List (ACNF N false)) (x : BitString N) :
+    eval.evalAll (l₁ ++ l₂) x = (eval.evalAll l₁ x && eval.evalAll l₂ x) := by
+  induction l₁ with
+  | nil => simp [eval.evalAll]
+  | cons c cs ih => simp only [List.cons_append, eval.evalAll, ih, Bool.and_assoc]
+
+theorem evalAny_append (l₁ l₂ : List (ACNF N true)) (x : BitString N) :
+    eval.evalAny (l₁ ++ l₂) x = (eval.evalAny l₁ x || eval.evalAny l₂ x) := by
+  induction l₁ with
+  | nil => simp [eval.evalAny]
+  | cons c cs ih => simp only [List.cons_append, eval.evalAny, ih, Bool.or_assoc]
+
+theorem depthAll_append (l₁ l₂ : List (ACNF N false)) :
+    depth.depthAll (l₁ ++ l₂) = max (depth.depthAll l₁) (depth.depthAll l₂) := by
+  induction l₁ with
+  | nil => simp [depth.depthAll]
+  | cons c cs ih => simp only [List.cons_append, depth.depthAll, ih, Nat.max_assoc]
+
+theorem depthAny_append (l₁ l₂ : List (ACNF N true)) :
+    depth.depthAny (l₁ ++ l₂) = max (depth.depthAny l₁) (depth.depthAny l₂) := by
+  induction l₁ with
+  | nil => simp [depth.depthAny]
+  | cons c cs ih => simp only [List.cons_append, depth.depthAny, ih, Nat.max_assoc]
+
+theorem leafCountAll_append (l₁ l₂ : List (ACNF N false)) :
+    leafCount.leafCountAll (l₁ ++ l₂) =
+    leafCount.leafCountAll l₁ + leafCount.leafCountAll l₂ := by
+  induction l₁ with
+  | nil => simp [leafCount.leafCountAll]
+  | cons c cs ih => simp only [List.cons_append, leafCount.leafCountAll, ih]; omega
+
+theorem leafCountAny_append (l₁ l₂ : List (ACNF N true)) :
+    leafCount.leafCountAny (l₁ ++ l₂) =
+    leafCount.leafCountAny l₁ + leafCount.leafCountAny l₂ := by
+  induction l₁ with
+  | nil => simp [leafCount.leafCountAny]
+  | cons c cs ih => simp only [List.cons_append, leafCount.leafCountAny, ih]; omega
+
+/-! ## Flatten correctness lemmas -/
+
+theorem flattenForAnd_evalAll (p : (b : Bool) × ACNF N b) (x : BitString N) :
+    eval.evalAll (flattenForAnd p) x = p.2.eval x := by
+  match p with
+  | ⟨_, .lit l⟩ => simp [flattenForAnd, eval.evalAll, eval]
+  | ⟨_, .and children⟩ => simp [flattenForAnd, eval]
+  | ⟨_, .or children⟩ => simp [flattenForAnd, eval.evalAll, eval]
+
+theorem flattenForOr_evalAny (p : (b : Bool) × ACNF N b) (x : BitString N) :
+    eval.evalAny (flattenForOr p) x = p.2.eval x := by
+  match p with
+  | ⟨_, .lit l⟩ => simp [flattenForOr, eval.evalAny, eval]
+  | ⟨_, .or children⟩ => simp [flattenForOr, eval]
+  | ⟨_, .and children⟩ => simp [flattenForOr, eval.evalAny, eval]
+
+theorem flattenForAnd_depthAll (p : (b : Bool) × ACNF N b) :
+    depth.depthAll (flattenForAnd p) ≤ p.2.depth := by
+  match p with
+  | ⟨_, .lit _⟩ => simp [flattenForAnd, depth.depthAll, depth]
+  | ⟨_, .and children⟩ => simp [flattenForAnd, depth]
+  | ⟨_, .or children⟩ => simp [flattenForAnd, depth.depthAll, depth]
+
+theorem flattenForOr_depthAny (p : (b : Bool) × ACNF N b) :
+    depth.depthAny (flattenForOr p) ≤ p.2.depth := by
+  match p with
+  | ⟨_, .lit _⟩ => simp [flattenForOr, depth.depthAny, depth]
+  | ⟨_, .or children⟩ => simp [flattenForOr, depth]
+  | ⟨_, .and children⟩ => simp [flattenForOr, depth.depthAny, depth]
+
+theorem flattenForAnd_leafCountAll (p : (b : Bool) × ACNF N b) :
+    leafCount.leafCountAll (flattenForAnd p) = p.2.leafCount := by
+  match p with
+  | ⟨_, .lit _⟩ => simp [flattenForAnd, leafCount.leafCountAll, leafCount]
+  | ⟨_, .and children⟩ => simp [flattenForAnd, leafCount]
+  | ⟨_, .or children⟩ => simp [flattenForAnd, leafCount.leafCountAll, leafCount]
+
+theorem flattenForOr_leafCountAny (p : (b : Bool) × ACNF N b) :
+    leafCount.leafCountAny (flattenForOr p) = p.2.leafCount := by
+  match p with
+  | ⟨_, .lit _⟩ => simp [flattenForOr, leafCount.leafCountAny, leafCount]
+  | ⟨_, .or children⟩ => simp [flattenForOr, leafCount]
+  | ⟨_, .and children⟩ => simp [flattenForOr, leafCount.leafCountAny, leafCount]
+
+/-! ## flatMap bridge lemmas -/
+
+theorem evalAll_flatMapForAnd (ps : List ((b : Bool) × ACNF N b)) (x : BitString N) :
+    eval.evalAll (flatMapForAnd ps) x = ps.all (fun p => p.2.eval x) := by
+  induction ps with
+  | nil => rfl
+  | cons p ps ih =>
+    simp only [flatMapForAnd, evalAll_append, ih, List.all_cons]
+    rw [flattenForAnd_evalAll]
+
+theorem evalAny_flatMapForOr (ps : List ((b : Bool) × ACNF N b)) (x : BitString N) :
+    eval.evalAny (flatMapForOr ps) x = ps.any (fun p => p.2.eval x) := by
+  induction ps with
+  | nil => rfl
+  | cons p ps ih =>
+    simp only [flatMapForOr, evalAny_append, ih, List.any_cons]
+    rw [flattenForOr_evalAny]
+
+theorem depthAll_flatMapForAnd (ps : List ((b : Bool) × ACNF N b))
+    (g : Nat) (h : ∀ p, p ∈ ps → p.2.depth ≤ g) :
+    depth.depthAll (flatMapForAnd ps) ≤ g := by
+  induction ps with
+  | nil => simp [flatMapForAnd, depth.depthAll]
+  | cons p ps ih =>
+    simp only [flatMapForAnd, depthAll_append]
+    apply max_le_iff.mpr
+    constructor
+    · exact Nat.le_trans (flattenForAnd_depthAll p) (h p (.head ps))
+    · exact ih (fun q hq => h q (.tail p hq))
+
+theorem depthAny_flatMapForOr (ps : List ((b : Bool) × ACNF N b))
+    (g : Nat) (h : ∀ p, p ∈ ps → p.2.depth ≤ g) :
+    depth.depthAny (flatMapForOr ps) ≤ g := by
+  induction ps with
+  | nil => simp [flatMapForOr, depth.depthAny]
+  | cons p ps ih =>
+    simp only [flatMapForOr, depthAny_append]
+    apply max_le_iff.mpr
+    constructor
+    · exact Nat.le_trans (flattenForOr_depthAny p) (h p (.head ps))
+    · exact ih (fun q hq => h q (.tail p hq))
+
+theorem leafCountAll_flatMapForAnd_cons (p : (b : Bool) × ACNF N b)
+    (ps : List ((b : Bool) × ACNF N b)) :
+    leafCount.leafCountAll (flatMapForAnd (p :: ps)) =
+    p.2.leafCount + leafCount.leafCountAll (flatMapForAnd ps) := by
+  simp [flatMapForAnd, leafCountAll_append, flattenForAnd_leafCountAll]
+
+theorem leafCountAny_flatMapForOr_cons (p : (b : Bool) × ACNF N b)
+    (ps : List ((b : Bool) × ACNF N b)) :
+    leafCount.leafCountAny (flatMapForOr (p :: ps)) =
+    p.2.leafCount + leafCount.leafCountAny (flatMapForOr ps) := by
+  simp [flatMapForOr, leafCountAny_append, flattenForOr_leafCountAny]
+
+end ACNF
+
+/-! ## ACNF wrappers for CNF/DNF/Circuit conversion -/
+
+-- Note: CNF.toACNF and DNF.toACNF are defined directly in Circ.NF.Defs.
+
+/-- Converting a CNF to ACNF preserves evaluation. -/
+theorem CNF.toACNF_eval (φ : CNF N) (x : BitString N) :
+    φ.toACNF.eval x = φ.eval x := by
+  simp only [CNF.toACNF, ACNF.eval, CNF.eval, ACNF.evalAll_map]
+  congr 1; ext clause
+  simp only [ACNF.eval, ACNF.evalAny_map, ACNF.eval]
+
+/-- Converting a DNF to ACNF preserves evaluation. -/
+theorem DNF.toACNF_eval (φ : DNF N) (x : BitString N) :
+    φ.toACNF.eval x = φ.eval x := by
+  simp only [DNF.toACNF, ACNF.eval, DNF.eval, ACNF.evalAny_map]
+  congr 1; ext term
+  simp only [ACNF.eval, ACNF.evalAll_map, ACNF.eval]
+
+/-! ## Direct Circuit to ACNF conversion
+
+Converts an unbounded-fan-in AND/OR circuit directly to a
+guaranteed-alternating `ACNF` tree, flattening consecutive same-op gates
+during the recursion (no intermediate `ACNFTree` step). -/
+
+namespace Circuit
+variable {N G : Nat} [NeZero N]
+
+/-! ### Circuit helper lemmas -/
+
+private theorem foldl_max_le_elem (n : Nat) (f : Fin n → Nat) (i : Fin n) :
+    f i ≤ Fin.foldl n (fun acc k => max acc (f k)) 0 := by
+  induction n with
+  | zero => exact absurd i.isLt (Nat.not_lt_zero _)
+  | succ n ih =>
+    rw [Fin.foldl_succ_last]
+    by_cases hi : (i : Nat) < n
+    · exact Nat.le_trans (ih (fun j => f j.castSucc) ⟨i, hi⟩) (Nat.le_max_left _ _)
+    · have : i = Fin.last n := by ext; simp [Fin.val_last]; omega
+      rw [this]; exact Nat.le_max_right _ _
+
+private theorem xor_not_xor (a b : Bool) : (!a ^^ b) = !(a ^^ b) := by
+  cases a <;> cases b <;> rfl
+
+/-- The fan-in of internal gate `i` is at most `maxFanIn`. -/
+private theorem gate_fanIn_le_maxFanIn {B : Basis} (c : Circuit B N 1 G) (i : Fin G) :
+    (c.gates i).fanIn ≤ maxFanIn c := by
+  unfold maxFanIn
+  exact Nat.le_trans (foldl_max_le_elem G (fun i => (c.gates i).fanIn) i) (Nat.le_max_left _ _)
+
+/-- The fan-in of the output gate is at most `maxFanIn`. -/
+private theorem output_fanIn_le_maxFanIn {B : Basis} (c : Circuit B N 1 G) :
+    (c.outputs 0).fanIn ≤ maxFanIn c := by
+  unfold maxFanIn
+  exact Nat.le_max_right _ _
+
+private theorem foldl_sum_le (n : Nat) (f : Fin n → Nat) (bound : Nat)
+    (h : ∀ k, f k ≤ bound) :
+    Fin.foldl n (fun acc k => acc + f k) 0 ≤ n * bound := by
+  induction n with
+  | zero => simp [Fin.foldl_zero]
+  | succ n ih =>
+    rw [Fin.foldl_succ, Nat.zero_add, foldl_add_init]
+    calc f 0 + Fin.foldl n (fun acc k => acc + f k.succ) 0
+        ≤ bound + n * bound :=
+          Nat.add_le_add (h 0) (ih (fun k => f k.succ) (fun k => h k.succ))
+      _ = (n + 1) * bound := by rw [Nat.succ_mul]; omega
+
+/-- Convert a wire in an unbounded-fan-in AND/OR circuit directly to ACNF.
+
+`pol = true` gives the wire's value; `pol = false` gives its negation.
+Negations are pushed to leaves via De Morgan duality. Consecutive same-op
+gates are flattened on the fly. -/
+def wireToACNF (c : Circuit Basis.unboundedAON N 1 G)
+    (w : Fin (N + G)) (pol : Bool) : (b : Bool) × ACNF N b :=
+  if h : w.val < N then
+    ⟨true, .lit ⟨⟨w.val, h⟩, pol⟩⟩
+  else
+    have hG : w.val - N < G := by omega
+    let gate := c.gates ⟨w.val - N, hG⟩
+    let rawChildren := List.ofFn (fun k : Fin gate.fanIn =>
+      c.wireToACNF (gate.inputs k) (Bool.xor pol (gate.negated k)))
+    match gate.op, pol with
+    | .and, true  => ⟨true, .and (ACNF.flatMapForAnd rawChildren)⟩
+    | .or, false  => ⟨true, .and (ACNF.flatMapForAnd rawChildren)⟩
+    | .or, true   => ⟨false, .or (ACNF.flatMapForOr rawChildren)⟩
+    | .and, false  => ⟨false, .or (ACNF.flatMapForOr rawChildren)⟩
+termination_by w.val
+decreasing_by
+  have hacyc := c.acyclic ⟨w.val - N, hG⟩ k
+  have : (⟨w.val - N, hG⟩ : Fin G).val = w.val - N := rfl
+  omega
+
+/-- Convert a single-output unbounded-fan-in AND/OR circuit directly to a
+guaranteed-alternating ACNF tree. The root polarity depends on the output gate. -/
+def toACNF (c : Circuit Basis.unboundedAON N 1 G) : (b : Bool) × ACNF N b :=
+  let outGate := c.outputs 0
+  let rawChildren := List.ofFn (fun k : Fin outGate.fanIn =>
+    c.wireToACNF (outGate.inputs k) (Bool.xor true (outGate.negated k)))
+  match outGate.op with
+  | .and => ⟨true, .and (ACNF.flatMapForAnd rawChildren)⟩
+  | .or  => ⟨false, .or (ACNF.flatMapForOr rawChildren)⟩
+
+/-! ### ofFn + flatMap bridge lemmas for Fin.foldl -/
+
+private theorem evalAll_ofFn_flatMapForAnd (n : Nat)
+    (f : Fin n → (b : Bool) × ACNF N b) (x : BitString N) :
+    ACNF.eval.evalAll (ACNF.flatMapForAnd (List.ofFn f)) x =
+    (Fin.foldl n (fun acc k => acc && (f k).2.eval x) true) := by
+  rw [ACNF.evalAll_flatMapForAnd]
+  induction n with
+  | zero => simp [List.ofFn_zero, Fin.foldl_zero]
+  | succ n ih =>
+    rw [List.ofFn_succ, List.all_cons, ih]
+    conv_rhs => rw [Fin.foldl_succ]; simp only [Bool.true_and]
+    exact (foldl_and_init n (fun k => (f k.succ).2.eval x)
+      ((f 0).2.eval x)).symm
+
+private theorem evalAny_ofFn_flatMapForOr (n : Nat)
+    (f : Fin n → (b : Bool) × ACNF N b) (x : BitString N) :
+    ACNF.eval.evalAny (ACNF.flatMapForOr (List.ofFn f)) x =
+    (Fin.foldl n (fun acc k => acc || (f k).2.eval x) false) := by
+  rw [ACNF.evalAny_flatMapForOr]
+  induction n with
+  | zero => simp [List.ofFn_zero, Fin.foldl_zero]
+  | succ n ih =>
+    rw [List.ofFn_succ, List.any_cons, ih]
+    conv_rhs => rw [Fin.foldl_succ]; simp only [Bool.false_or]
+    exact (foldl_or_init n (fun k => (f k.succ).2.eval x)
+      ((f 0).2.eval x)).symm
+
+private theorem depthAll_ofFn_flatMapForAnd_le (n : Nat)
+    (f : Fin n → (b : Bool) × ACNF N b) (g : Fin n → Nat)
+    (h : ∀ k, (f k).2.depth ≤ g k) :
+    ACNF.depth.depthAll (ACNF.flatMapForAnd (List.ofFn f)) ≤
+    Fin.foldl n (fun acc k => max acc (g k)) 0 := by
+  apply ACNF.depthAll_flatMapForAnd
+  intro p hp
+  rw [List.mem_ofFn] at hp
+  obtain ⟨k, rfl⟩ := hp
+  exact Nat.le_trans (h k) (foldl_max_le_elem n g k)
+
+private theorem depthAny_ofFn_flatMapForOr_le (n : Nat)
+    (f : Fin n → (b : Bool) × ACNF N b) (g : Fin n → Nat)
+    (h : ∀ k, (f k).2.depth ≤ g k) :
+    ACNF.depth.depthAny (ACNF.flatMapForOr (List.ofFn f)) ≤
+    Fin.foldl n (fun acc k => max acc (g k)) 0 := by
+  apply ACNF.depthAny_flatMapForOr
+  intro p hp
+  rw [List.mem_ofFn] at hp
+  obtain ⟨k, rfl⟩ := hp
+  exact Nat.le_trans (h k) (foldl_max_le_elem n g k)
+
+private theorem leafCountAll_ofFn_flatMapForAnd (n : Nat)
+    (f : Fin n → (b : Bool) × ACNF N b) :
+    ACNF.leafCount.leafCountAll (ACNF.flatMapForAnd (List.ofFn f)) =
+    Fin.foldl n (fun acc k => acc + (f k).2.leafCount) 0 := by
+  induction n with
+  | zero => simp [List.ofFn_zero, ACNF.flatMapForAnd, ACNF.leafCount.leafCountAll, Fin.foldl_zero]
+  | succ n ih =>
+    rw [List.ofFn_succ, ACNF.leafCountAll_flatMapForAnd_cons, ih]
+    conv_rhs => rw [Fin.foldl_succ]; simp only [Nat.zero_add]
+    exact (foldl_add_init n (fun k => (f k.succ).2.leafCount)
+      ((f 0).2.leafCount)).symm
+
+private theorem leafCountAny_ofFn_flatMapForOr (n : Nat)
+    (f : Fin n → (b : Bool) × ACNF N b) :
+    ACNF.leafCount.leafCountAny (ACNF.flatMapForOr (List.ofFn f)) =
+    Fin.foldl n (fun acc k => acc + (f k).2.leafCount) 0 := by
+  induction n with
+  | zero => simp [List.ofFn_zero, ACNF.flatMapForOr, ACNF.leafCount.leafCountAny, Fin.foldl_zero]
+  | succ n ih =>
+    rw [List.ofFn_succ, ACNF.leafCountAny_flatMapForOr_cons, ih]
+    conv_rhs => rw [Fin.foldl_succ]; simp only [Nat.zero_add]
+    exact (foldl_add_init n (fun k => (f k.succ).2.leafCount)
+      ((f 0).2.leafCount)).symm
+
+/-! ### Eval correctness -/
+
+/-- Converting a wire to ACNF preserves evaluation (with polarity). -/
+theorem wireToACNF_eval (c : Circuit Basis.unboundedAON N 1 G)
+    (x : BitString N) (w : Fin (N + G)) (pol : Bool) :
+    (c.wireToACNF w pol).2.eval x = (!pol ^^ c.wireValue x w) := by
+  by_cases h : w.val < N
+  · -- Primary input (w.val < N)
+    rw [wireToACNF, dif_pos h]
+    simp only [wireValue_lt c x w h, ACNF.eval, Literal.eval]
+    cases pol <;> simp
+  · -- Gate wire (w.val ≥ N)
+    have hG : w.val - N < G := by omega
+    rw [wireToACNF, dif_neg h]; dsimp only []
+    conv_rhs => rw [wireValue_ge c x w h]; simp only [Gate.eval, Basis.unboundedAON]
+    rcases hop : (c.gates ⟨w.val - N, hG⟩).op with _ | _ <;> rcases pol with _ | _ <;>
+      dsimp only [] <;> simp only [AONOp.eval, ACNF.eval, Bool.true_xor,
+        Bool.false_xor, Bool.not_true, Bool.not_false]
+    -- AND/false: De Morgan — evalAny vs !(foldl &&)
+    · have ce := fun k => wireToACNF_eval c x
+        ((c.gates ⟨w.val - N, hG⟩).inputs k) ((c.gates ⟨w.val - N, hG⟩).negated k)
+      simp_rw [xor_not_xor] at ce
+      rw [evalAny_ofFn_flatMapForOr]; simp_rw [ce]; exact foldl_deMorgan_and _ _
+    -- AND/true: same-op — evalAll vs foldl &&
+    · have ce := fun k => wireToACNF_eval c x
+        ((c.gates ⟨w.val - N, hG⟩).inputs k) (!(c.gates ⟨w.val - N, hG⟩).negated k)
+      rw [evalAll_ofFn_flatMapForAnd]; simp_rw [ce, xor_not_xor, Bool.not_not]; rfl
+    -- OR/false: De Morgan — evalAll vs !(foldl ||)
+    · have ce := fun k => wireToACNF_eval c x
+        ((c.gates ⟨w.val - N, hG⟩).inputs k) ((c.gates ⟨w.val - N, hG⟩).negated k)
+      simp_rw [xor_not_xor] at ce
+      rw [evalAll_ofFn_flatMapForAnd]; simp_rw [ce]; exact foldl_deMorgan_or _ _
+    -- OR/true: same-op — evalAny vs foldl ||
+    · have ce := fun k => wireToACNF_eval c x
+        ((c.gates ⟨w.val - N, hG⟩).inputs k) (!(c.gates ⟨w.val - N, hG⟩).negated k)
+      rw [evalAny_ofFn_flatMapForOr]; simp_rw [ce, xor_not_xor, Bool.not_not]; rfl
+termination_by w.val
+decreasing_by
+  all_goals (
+    have hacyc := c.acyclic ⟨w.val - N, by omega⟩ k
+    have : (⟨w.val - N, by omega⟩ : Fin G).val = w.val - N := rfl
+    omega)
+
+/-- Converting a circuit to ACNF preserves evaluation. -/
+theorem toACNF_eval (c : Circuit Basis.unboundedAON N 1 G) (x : BitString N) :
+    (c.toACNF).2.eval x = (c.eval x) 0 := by
+  simp only [toACNF, eval, Gate.eval, Basis.unboundedAON]
+  rcases hop : (c.outputs 0).op with _ | _
+  · simp only [AONOp.eval, ACNF.eval]
+    rw [evalAll_ofFn_flatMapForAnd]; simp_rw [wireToACNF_eval, Bool.true_xor, Bool.not_not]; rfl
+  · simp only [AONOp.eval, ACNF.eval]
+    rw [evalAny_ofFn_flatMapForOr]; simp_rw [wireToACNF_eval, Bool.true_xor, Bool.not_not]; rfl
+
+/-! ### Depth bound -/
+
+/-- The ACNF for a wire has depth at most the wire's depth. -/
+theorem wireToACNF_depth_le (c : Circuit Basis.unboundedAON N 1 G)
+    (w : Fin (N + G)) (pol : Bool) :
+    (c.wireToACNF w pol).2.depth ≤ c.wireDepth w := by
+  by_cases h : w.val < N
+  · rw [wireToACNF, dif_pos h]; simp [wireDepth_lt c w h, ACNF.depth]
+  · have hG : w.val - N < G := by omega
+    rw [wireToACNF, dif_neg h]; dsimp only []
+    conv_rhs => rw [wireDepth_ge c w h]
+    rcases hop : (c.gates ⟨w.val - N, hG⟩).op with _ | _ <;> rcases pol with _ | _ <;>
+      dsimp only [] <;> simp only [ACNF.depth]
+    all_goals (
+      apply Nat.add_le_add_left
+      first
+      | exact depthAll_ofFn_flatMapForAnd_le _ _ _ fun k =>
+          wireToACNF_depth_le c ((c.gates ⟨w.val - N, hG⟩).inputs k) _
+      | exact depthAny_ofFn_flatMapForOr_le _ _ _ fun k =>
+          wireToACNF_depth_le c ((c.gates ⟨w.val - N, hG⟩).inputs k) _)
+termination_by w.val
+decreasing_by
+  all_goals (
+    have hacyc := c.acyclic ⟨w.val - N, by omega⟩ k
+    have : (⟨w.val - N, by omega⟩ : Fin G).val = w.val - N := rfl
+    omega)
+
+/-- The ACNF depth is at most the circuit depth. -/
+theorem toACNF_depth_le (c : Circuit Basis.unboundedAON N 1 G) :
+    (c.toACNF).2.depth ≤ c.depth := by
+  simp only [toACNF, depth]
+  rcases (c.outputs 0).op with _ | _ <;>
+    simp only [ACNF.depth]
+  · exact Nat.add_le_add_left
+      (depthAll_ofFn_flatMapForAnd_le _ _ _ fun k =>
+        wireToACNF_depth_le c ((c.outputs 0).inputs k) _) 1
+  · exact Nat.add_le_add_left
+      (depthAny_ofFn_flatMapForOr_le _ _ _ fun k =>
+        wireToACNF_depth_le c ((c.outputs 0).inputs k) _) 1
+
+/-! ### Leaf count bound -/
+
+/-- The ACNF for a wire has at most `maxFanIn ^ wireDepth` leaves. -/
+theorem wireToACNF_leafCount_le (c : Circuit Basis.unboundedAON N 1 G)
+    (w : Fin (N + G)) (pol : Bool) :
+    (c.wireToACNF w pol).2.leafCount ≤ c.maxFanIn ^ c.wireDepth w := by
+  by_cases h : w.val < N
+  · rw [wireToACNF, dif_pos h]; simp [wireDepth_lt c w h, ACNF.leafCount]
+  · have hG : w.val - N < G := by omega
+    rw [wireToACNF, dif_neg h]; dsimp only []
+    conv_rhs => rw [wireDepth_ge c w h]
+    have lc_ih : ∀ k : Fin (c.gates ⟨w.val - N, hG⟩).fanIn,
+        (c.wireToACNF ((c.gates ⟨w.val - N, hG⟩).inputs k)
+          (pol ^^ (c.gates ⟨w.val - N, hG⟩).negated k)).2.leafCount ≤
+        c.maxFanIn ^ c.wireDepth ((c.gates ⟨w.val - N, hG⟩).inputs k) :=
+      fun k => wireToACNF_leafCount_le c _ _
+    rcases hop : (c.gates ⟨w.val - N, hG⟩).op with _ | _ <;> rcases pol with _ | _ <;>
+      dsimp only [] <;> simp only [ACNF.leafCount]
+    all_goals (
+      first
+      | rw [leafCountAll_ofFn_flatMapForAnd]
+      | rw [leafCountAny_ofFn_flatMapForOr]
+      set D := Fin.foldl (c.gates ⟨w.val - N, hG⟩).fanIn
+            (fun acc k => max acc (c.wireDepth ((c.gates ⟨w.val - N, hG⟩).inputs k))) 0
+      have hD : ∀ k, c.wireDepth ((c.gates ⟨w.val - N, hG⟩).inputs k) ≤ D :=
+        fun k => foldl_max_le_elem _
+          (fun j => c.wireDepth ((c.gates ⟨w.val - N, hG⟩).inputs j)) k
+      by_cases hM : c.maxFanIn = 0
+      · have : (c.gates ⟨w.val - N, hG⟩).fanIn = 0 := by
+          have := gate_fanIn_le_maxFanIn c ⟨w.val - N, hG⟩; omega
+        simp [this, Fin.foldl_zero]
+      · have hM_pos : 0 < c.maxFanIn := Nat.pos_of_ne_zero hM
+        have hbound : ∀ k : Fin (c.gates ⟨w.val - N, hG⟩).fanIn,
+            (c.wireToACNF ((c.gates ⟨w.val - N, hG⟩).inputs k)
+              (_ ^^ (c.gates ⟨w.val - N, hG⟩).negated k)).2.leafCount ≤
+            c.maxFanIn ^ D :=
+          fun k => Nat.le_trans (lc_ih k) (Nat.pow_le_pow_right hM_pos (hD k))
+        calc Fin.foldl _ (fun acc k => acc +
+                (c.wireToACNF ((c.gates ⟨w.val - N, hG⟩).inputs k)
+                  (_ ^^ (c.gates ⟨w.val - N, hG⟩).negated k)).2.leafCount) 0
+            ≤ _ * c.maxFanIn ^ D := foldl_sum_le _ _ _ hbound
+          _ ≤ c.maxFanIn * c.maxFanIn ^ D :=
+              Nat.mul_le_mul_right _ (gate_fanIn_le_maxFanIn c ⟨w.val - N, hG⟩)
+          _ = c.maxFanIn ^ (D + 1) := (pow_succ' c.maxFanIn D).symm
+          _ = c.maxFanIn ^ (1 + D) := by congr 1; omega)
+termination_by w.val
+decreasing_by
+  all_goals (
+    have hacyc := c.acyclic ⟨w.val - N, by omega⟩ k
+    have : (⟨w.val - N, by omega⟩ : Fin G).val = w.val - N := rfl
+    omega)
+
+/-- The ACNF leaf count is at most `maxFanIn ^ depth`. -/
+theorem toACNF_leafCount_le (c : Circuit Basis.unboundedAON N 1 G) :
+    (c.toACNF).2.leafCount ≤ c.maxFanIn ^ c.depth := by
+  simp only [toACNF, depth]
+  rcases hop : (c.outputs 0).op with _ | _ <;>
+    (simp only []; simp only [ACNF.leafCount])
+  all_goals (
+    first
+    | rw [leafCountAll_ofFn_flatMapForAnd]
+    | rw [leafCountAny_ofFn_flatMapForOr]
+    set D := Fin.foldl (c.outputs 0).fanIn
+          (fun acc k => max acc (c.wireDepth ((c.outputs 0).inputs k))) 0
+    have hD : ∀ k, c.wireDepth ((c.outputs 0).inputs k) ≤ D :=
+      fun k => foldl_max_le_elem _
+        (fun j => c.wireDepth ((c.outputs 0).inputs j)) k
+    by_cases hM : c.maxFanIn = 0
+    · have : (c.outputs 0).fanIn = 0 := by
+        have := output_fanIn_le_maxFanIn c; omega
+      simp [this, Fin.foldl_zero]
+    · have hM_pos : 0 < c.maxFanIn := Nat.pos_of_ne_zero hM
+      have hbound : ∀ k : Fin (c.outputs 0).fanIn,
+          (c.wireToACNF ((c.outputs 0).inputs k)
+            (true ^^ (c.outputs 0).negated k)).2.leafCount ≤
+          c.maxFanIn ^ D :=
+        fun k => Nat.le_trans (wireToACNF_leafCount_le c _ _)
+          (Nat.pow_le_pow_right hM_pos (hD k))
+      calc Fin.foldl _ (fun acc k => acc +
+              (c.wireToACNF ((c.outputs 0).inputs k)
+                (true ^^ (c.outputs 0).negated k)).2.leafCount) 0
+          ≤ _ * c.maxFanIn ^ D := foldl_sum_le _ _ _ hbound
+        _ ≤ c.maxFanIn * c.maxFanIn ^ D :=
+            Nat.mul_le_mul_right _ (output_fanIn_le_maxFanIn c)
+        _ = c.maxFanIn ^ (D + 1) := (pow_succ' c.maxFanIn D).symm
+        _ = c.maxFanIn ^ (1 + D) := by congr 1; omega)
+
+end Circuit

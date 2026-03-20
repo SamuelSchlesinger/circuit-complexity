@@ -6,6 +6,7 @@ import Circ.EssentialInput
 import Circ.Shannon
 import Circ.LowerBound
 import Circ.Schnorr
+import Circ.Internal.NF
 
 /-! # Circuit Complexity Library
 
@@ -46,9 +47,12 @@ is the minimum size of any circuit computing it.
 
 Public modules (definitions a reviewer should read):
 
-* `Circ.Basic` — `Circuit`, `Basis`, `Gate`, `CompleteBasis`, `size_complexity`
+* `Circ.Basic` — `Circuit`, `Basis`, `Gate`, `CompleteBasis`, `size_complexity`,
+  `wireDepth`, `depth`
 * `Circ.AON.Defs` — `AONOp`, `Basis.unboundedAON`, `Basis.boundedAON`, `Basis.andOr2`
-* `Circ.NF.Defs` — `Literal`, `CNF`, `DNF`, `CNF.complexity`, `DNF.complexity`
+* `Circ.NF.Defs` — `Literal`, `CNF`, `DNF`, `CNF.complexity`, `DNF.complexity`,
+  `ACNF` (indexed alternating tree, alternation enforced by construction),
+  `CNF.toACNF`, `DNF.toACNF`
 * `Circ.NF` — CNF/DNF lower bound for XOR (`xorBool_complexity_lb`)
 * `Circ.XOR` — `Schnorr.xorBool` (N-input parity)
 * `Circ.EssentialInput` — `IsEssentialInput`, `EssentialInputs`
@@ -59,6 +63,8 @@ Theorem modules (re-export definitions + main results):
 * `Circ.Shannon` — Shannon counting lower bound
 * `Circ.LowerBound` — gate elimination lower bound
 * `Circ.Schnorr` — Schnorr's XOR lower bound
+* `Circ.Internal.NF` — alternating normal form: `Circuit.toACNF`
+  (direct circuit to ACNF conversion): evaluation, depth, leaf count
 
 Internal modules contain proof machinery (CircDesc, DNF construction,
 restriction/elimination arguments) and are not intended for direct use.
