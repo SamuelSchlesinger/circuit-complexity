@@ -927,7 +927,8 @@ private theorem wireValue_orChain_sem (N : Nat) [NeZero N]
     set_option maxHeartbeats 3200000 in
     rw [Circuit.wireValue_ge _ _ _ (show ¬((⟨N + oF (addrBits N) (dataBits N) + 0, hW⟩ :
         Fin _).val < N) from by show ¬(N + oF (addrBits N) (dataBits N) + 0 < N); omega)]
-    simp only [lupanovCircuit]; unfold lupanovGateArray
+    change (lupanovGateArray N f hN ⟨_, _⟩).val.eval _ = _
+    unfold lupanovGateArray
     simp only [show N + oF (addrBits N) (dataBits N) + 0 - N =
       oF (addrBits N) (dataBits N) + 0 from by omega]
     rw [dif_neg (by unfold oF oE oD oC; omega : ¬(oF (addrBits N) (dataBits N) + 0 = 0))]
@@ -941,12 +942,23 @@ private theorem wireValue_orChain_sem (N : Nat) [NeZero N]
       ¬(oF (addrBits N) (dataBits N) + 0 < oF (addrBits N) (dataBits N)))]
     simp only [mkG, Gate.eval, Basis.andOr2, AONOp.eval,
       Fin.foldl_succ_last, Fin.foldl_zero, Bool.false_or, ite_self, Bool.false_xor]
+    simp only [show oF (addrBits N) (dataBits N) + 0 - oF (addrBits N) (dataBits N) = 0
+      from by omega, ite_true,
+      Fin.val_last, Fin.val_castSucc, ite_false,
+      show (0 : Nat) = 0 from rfl, show ¬((1 : Nat) = 0) from by omega,
+      show (0 : Nat) + 1 = 1 from by omega]
+    simp only [andLayer_sem,
+      List.range, List.foldl, Bool.false_or,
+      dif_pos (show 0 < 2 ^ dataBits N from by omega),
+      dif_pos (show 1 < 2 ^ dataBits N from by omega)]
+    try rfl
     sorry
   | succ r' ih =>
     set_option maxHeartbeats 3200000 in
     rw [Circuit.wireValue_ge _ _ _ (show ¬((⟨N + oF (addrBits N) (dataBits N) + (r' + 1), hW⟩ :
         Fin _).val < N) from by show ¬(N + oF (addrBits N) (dataBits N) + (r' + 1) < N); omega)]
-    simp only [lupanovCircuit]; unfold lupanovGateArray
+    change (lupanovGateArray N f hN ⟨_, _⟩).val.eval _ = _
+    unfold lupanovGateArray
     simp only [show N + oF (addrBits N) (dataBits N) + (r' + 1) - N =
       oF (addrBits N) (dataBits N) + (r' + 1) from by omega]
     rw [dif_neg (by unfold oF oE oD oC; omega :
@@ -961,7 +973,37 @@ private theorem wireValue_orChain_sem (N : Nat) [NeZero N]
       ¬(oF (addrBits N) (dataBits N) + (r' + 1) < oF (addrBits N) (dataBits N)))]
     simp only [mkG, Gate.eval, Basis.andOr2, AONOp.eval,
       Fin.foldl_succ_last, Fin.foldl_zero, Bool.false_or, ite_self, Bool.false_xor]
-    sorry
+    simp only [show oF (addrBits N) (dataBits N) + (r' + 1) -
+      oF (addrBits N) (dataBits N) = r' + 1 from by omega,
+      show r' + 1 ≠ 0 from by omega, ite_false,
+      show r' + 1 - 1 = r' from by omega]
+    have hr' : r' < 2 ^ dataBits N - 1 := by omega
+    have hW' : N + oF (addrBits N) (dataBits N) + r' <
+        N + szSections (addrBits N) (dataBits N) := by linarith
+    simp only [Fin.val_last, Fin.val_castSucc, ite_true, ite_false,
+      show ¬((1 : Nat) = 0) from by omega]
+    have hih := ih hr' hW'
+    simp only [show r' + 1 + 1 = r' + 2 from by omega]
+    show ((lupanovCircuit N f hN).wireValue x ⟨N + oF (addrBits N) (dataBits N) + r', hW'⟩ ||
+         (lupanovCircuit N f hN).wireValue x
+           ⟨N + oE (addrBits N) (dataBits N) + (r' + 2), by linarith⟩) =
+        List.foldl (fun acc y => acc || if h : y < 2 ^ dataBits N
+          then andLayerSem N f hN x y h else false) false (List.range (r' + 1 + 2))
+    rw [hih, andLayer_sem (r' + 2) (by omega) (by linarith)]
+    rw [show r' + 1 + 2 = (r' + 2) + 1 from by omega,
+        List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil]
+    have hr2 : r' + 2 < 2 ^ dataBits N := by omega
+    have hr2 : r' + 2 < 2 ^ dataBits N := by omega
+    rw [show andLayerSem N f hN x (r' + 2) hr2 =
+      (if h : r' + 2 < 2 ^ dataBits N then andLayerSem N f hN x (r' + 2) h else false) from
+      by rw [dif_pos hr2]]
+    rw [Bool.or_assoc]
+    simp only [show r' + 1 + 2 = r' + 2 + 1 from by omega,
+      show r' + 2 = r' + 1 + 1 from by omega,
+      List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil,
+      dif_pos (show r' + 2 < 2 ^ dataBits N from by omega),
+      dif_pos (show r' + 1 < 2 ^ dataBits N from by omega),
+      Bool.or_assoc]
 
 private theorem lastOrChain_eq_f (N : Nat) [NeZero N]
     (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N)
