@@ -35,60 +35,84 @@ def dataBits (N : Nat) : Nat := N - addrBits N
 -- Section 2: Gate Construction Helpers
 -- ════════════════════════════════════════════════════════════════
 
-/-- Build a fan-in-2 gate from two wire references and negation flags. -/
-private def mkGate2 (op : AONOp) {W : Nat}
-    (w₀ w₁ : Fin W) (n₀ n₁ : Bool) : Gate Basis.andOr2 W where
-  op := op; fanIn := 2; arityOk := rfl
-  inputs i := if i.val = 0 then w₀ else w₁
-  negated i := if i.val = 0 then n₀ else n₁
+/-- Build a fan-in-2 gate bundled with an acyclicity proof. -/
+private def mkGate2' (op : AONOp) {W : Nat} (w₀ w₁ : Fin W) (n₀ n₁ : Bool)
+    (bound : Nat) (hw₀ : w₀.val < bound) (hw₁ : w₁.val < bound) :
+    { g : Gate Basis.andOr2 W // ∀ k : Fin g.fanIn, (g.inputs k).val < bound } :=
+  ⟨{ op := op, fanIn := 2, arityOk := rfl,
+     inputs := fun i => if i.val = 0 then w₀ else w₁,
+     negated := fun i => if i.val = 0 then n₀ else n₁ },
+   fun k => by dsimp; split_ifs <;> assumption⟩
 
-/-- Remap a wire from c₂'s space into the combined space: primary inputs
-    stay, internal wires shift by `G₁ + 1`. -/
+/-- Remap a wire from c₂'s space into the combined space. -/
 private def remap₂ (N G₁ G₂ : Nat) (w : Fin (N + G₂)) : Fin (N + (G₁ + G₂ + 2)) :=
   if h : w.val < N then ⟨w.val, by omega⟩
   else ⟨w.val + G₁ + 1, by have := w.isLt; omega⟩
 
-private def gw₀ {W : Nat} (g : Gate Basis.andOr2 W) : Fin W :=
-  g.inputs ⟨0, by rw [andOr2_fanIn]; omega⟩
-private def gw₁ {W : Nat} (g : Gate Basis.andOr2 W) : Fin W :=
-  g.inputs ⟨1, by rw [andOr2_fanIn]; omega⟩
-private def gn₀ {W : Nat} (g : Gate Basis.andOr2 W) : Bool :=
-  g.negated ⟨0, by rw [andOr2_fanIn]; omega⟩
-private def gn₁ {W : Nat} (g : Gate Basis.andOr2 W) : Bool :=
-  g.negated ⟨1, by rw [andOr2_fanIn]; omega⟩
+private lemma remap₂_val_lt (N G₁ G₂ : Nat) (w : Fin (N + G₂))
+    (bound : Nat) (hb : G₁ + 1 ≤ bound) (hw : w.val < N + (bound - G₁ - 1)) :
+    (remap₂ N G₁ G₂ w).val < N + bound := by
+  unfold remap₂; split_ifs <;> dsimp <;> omega
 
-/-- Lift a wire from c₁'s space into the combined space (extend bound). -/
-private def lift₁ {N G₁ G₂ : Nat} (w : Fin (N + G₁)) : Fin (N + (G₁ + G₂ + 2)) :=
-  ⟨w.val, by omega⟩
+private def gw (idx : Nat) {W : Nat} (g : Gate Basis.andOr2 W)
+    (_ : idx < 2 := by omega) : Fin W :=
+  g.inputs ⟨idx, by rw [andOr2_fanIn]; omega⟩
+private def gn (idx : Nat) {W : Nat} (g : Gate Basis.andOr2 W)
+    (_ : idx < 2 := by omega) : Bool :=
+  g.negated ⟨idx, by rw [andOr2_fanIn]; omega⟩
 
 -- ════════════════════════════════════════════════════════════════
--- Section 2b: Binary Circuit Composition
+-- Section 2b: Binary Circuit Composition (fully proved)
 -- ════════════════════════════════════════════════════════════════
+
+/-- Gate + acyclicity proof for the binary composition, bundled as a subtype. -/
+private def binopGWP {N G₁ G₂ : Nat} [NeZero N]
+    (c₁ : Circuit Basis.andOr2 N 1 G₁) (c₂ : Circuit Basis.andOr2 N 1 G₂)
+    (i : Fin (G₁ + G₂ + 2)) :
+    { g : Gate Basis.andOr2 (N + (G₁ + G₂ + 2)) //
+      ∀ k : Fin g.fanIn, (g.inputs k).val < N + i.val } :=
+  if h₁ : i.val < G₁ then
+    let g := c₁.gates ⟨i.val, h₁⟩
+    mkGate2' g.op ⟨(gw 0 g).val, by omega⟩ ⟨(gw 1 g).val, by omega⟩ (gn 0 g) (gn 1 g)
+      (N + i.val)
+      (show (gw 0 g).val < _ from c₁.acyclic ⟨_, h₁⟩ ⟨0, by rw [andOr2_fanIn]; omega⟩)
+      (show (gw 1 g).val < _ from c₁.acyclic ⟨_, h₁⟩ ⟨1, by rw [andOr2_fanIn]; omega⟩)
+  else if h₂ : i.val = G₁ then
+    let g := c₁.outputs 0
+    mkGate2' g.op ⟨(gw 0 g).val, by omega⟩ ⟨(gw 1 g).val, by omega⟩ (gn 0 g) (gn 1 g)
+      (N + i.val)
+      (show (gw 0 g).val < _ by have := (gw 0 g).isLt; omega)
+      (show (gw 1 g).val < _ by have := (gw 1 g).isLt; omega)
+  else if h₃ : i.val < G₁ + 1 + G₂ then
+    let g := c₂.gates ⟨i.val - G₁ - 1, by omega⟩
+    mkGate2' g.op (remap₂ N G₁ G₂ (gw 0 g)) (remap₂ N G₁ G₂ (gw 1 g)) (gn 0 g) (gn 1 g)
+      (N + i.val)
+      (remap₂_val_lt N G₁ G₂ (gw 0 g) i.val (by omega)
+        (c₂.acyclic ⟨i.val-G₁-1, by omega⟩ ⟨0, by rw [andOr2_fanIn]; omega⟩))
+      (remap₂_val_lt N G₁ G₂ (gw 1 g) i.val (by omega)
+        (c₂.acyclic ⟨i.val-G₁-1, by omega⟩ ⟨1, by rw [andOr2_fanIn]; omega⟩))
+  else
+    let g := c₂.outputs 0
+    mkGate2' g.op (remap₂ N G₁ G₂ (gw 0 g)) (remap₂ N G₁ G₂ (gw 1 g)) (gn 0 g) (gn 1 g)
+      (N + i.val)
+      (remap₂_val_lt N G₁ G₂ (gw 0 g) i.val (by omega)
+        (show (gw 0 g).val < _ by have := (gw 0 g).isLt; omega))
+      (remap₂_val_lt N G₁ G₂ (gw 1 g) i.val (by omega)
+        (show (gw 1 g).val < _ by have := (gw 1 g).isLt; omega))
 
 /-- Compose two circuits with a binary AND/OR. Produces `G₁ + G₂ + 2`
-    internal gates by internalizing both circuits' output gates and adding
-    a binary op gate as the new output.
-
-    Gate layout: `[c₁.gates | c₁.out | c₂.gates(remapped) | c₂.out(remapped)]`
+    internal gates. Gate layout:
+    `[c₁.gates | c₁.out | c₂.gates(remapped) | c₂.out(remapped)]`.
     Output: `op(wire[N+G₁], wire[N+G₁+G₂+1])`. -/
 def binopCircuit (op : AONOp) {N G₁ G₂ : Nat} [NeZero N]
     (c₁ : Circuit Basis.andOr2 N 1 G₁) (c₂ : Circuit Basis.andOr2 N 1 G₂) :
     Circuit Basis.andOr2 N 1 (G₁ + G₂ + 2) where
-  gates i :=
-    if h₁ : i.val < G₁ then
-      let g := c₁.gates ⟨i.val, h₁⟩
-      mkGate2 g.op (lift₁ (gw₀ g)) (lift₁ (gw₁ g)) (gn₀ g) (gn₁ g)
-    else if _ : i.val = G₁ then
-      let g := c₁.outputs 0
-      mkGate2 g.op (lift₁ (gw₀ g)) (lift₁ (gw₁ g)) (gn₀ g) (gn₁ g)
-    else if h₃ : i.val < G₁ + 1 + G₂ then
-      let g := c₂.gates ⟨i.val - G₁ - 1, by omega⟩
-      mkGate2 g.op (remap₂ N G₁ G₂ (gw₀ g)) (remap₂ N G₁ G₂ (gw₁ g)) (gn₀ g) (gn₁ g)
-    else
-      let g := c₂.outputs 0
-      mkGate2 g.op (remap₂ N G₁ G₂ (gw₀ g)) (remap₂ N G₁ G₂ (gw₁ g)) (gn₀ g) (gn₁ g)
-  outputs _ := mkGate2 op ⟨N + G₁, by omega⟩ ⟨N + G₁ + G₂ + 1, by omega⟩ false false
-  acyclic := by intro i k; sorry
+  gates i := (binopGWP c₁ c₂ i).val
+  outputs _ :=
+    { op := op, fanIn := 2, arityOk := rfl,
+      inputs := fun j => if j.val = 0 then ⟨N + G₁, by omega⟩ else ⟨N + G₁ + G₂ + 1, by omega⟩,
+      negated := fun _ => false }
+  acyclic i k := (binopGWP c₁ c₂ i).property k
 
 -- ════════════════════════════════════════════════════════════════
 -- Section 3: Full Lupanov Assembly (sorry'd)
