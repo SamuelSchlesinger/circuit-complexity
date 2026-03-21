@@ -936,6 +936,10 @@ private theorem wireValue_orChain_sem (N : Nat) [NeZero N]
       oE (addrBits N) (dataBits N) + y < oF (addrBits N) (dataBits N))]
     simp only [mkG, Gate.eval, Basis.andOr2, AONOp.eval,
       Fin.foldl_succ_last, Fin.foldl_zero, Bool.false_and, Bool.true_and, ite_self, Bool.false_xor]
+    simp only [Fin.val_last, Fin.val_castSucc, ite_true, ite_false,
+      show ¬((1 : Nat) = 0) from by omega,
+      show oE (addrBits N) (dataBits N) + y - oE (addrBits N) (dataBits N) = y from by omega]
+    unfold andLayerSem
     sorry
   have hoEF : oE (addrBits N) (dataBits N) + 2 ^ dataBits N =
       oF (addrBits N) (dataBits N) := by unfold oF; ring
