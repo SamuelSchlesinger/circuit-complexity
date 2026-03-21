@@ -376,6 +376,27 @@ lemma treeParentIdx_lt_j (l m j : Nat) (hl : 2 ≤ l)
   rw [hpow_eq]
   omega
 
+private lemma treeLevel_parent (l m : Nat) (hl : 2 ≤ l) :
+    treeLevel (treeParentIdx l m) = l - 1 := by
+  unfold treeLevel treeParentIdx treeBase
+  have h4l : 4 ≤ 2 ^ l := pow_ge_4 l hl
+  have hmod : m % 2 ^ l < 2 ^ l := Nat.mod_lt _ (by positivity)
+  have hlm1 : l - 1 + 1 = l := by omega
+  have harg : 2 ^ (l - 1 + 1) - 4 + m % 2 ^ l + 4 = 2 ^ l + m % 2 ^ l := by
+    rw [hlm1]; omega
+  rw [harg]
+  suffices Nat.log 2 (2 ^ l + m % 2 ^ l) = l by omega
+  apply le_antisymm
+  · exact Nat.lt_succ_iff.mp (Nat.log_lt_of_lt_pow (by omega)
+      (show 2 ^ l + m % 2 ^ l < 2 ^ (l + 1) by have := pow_double l; omega))
+  · exact Nat.le_log_of_pow_le (by omega) (by omega)
+
+private lemma treePos_parent (l m : Nat) (hl : 2 ≤ l) :
+    treePos (treeParentIdx l m) (l - 1) = m % 2 ^ l := by
+  show treeParentIdx l m - treeBase (l - 1) = m % 2 ^ l
+  show treeBase (l - 1) + m % 2 ^ l - treeBase (l - 1) = m % 2 ^ l
+  omega
+
 /-! ### Column pattern encoding -/
 
 noncomputable def encodeCol (k : Nat) (col : Fin (2^k) → Bool) : Nat :=
@@ -988,6 +1009,21 @@ private theorem wireValue_dataLeaf (N : Nat) [NeZero N]
           from by show addrBits N + treeLevel j < N; omega)]
         have hpar := ih (treeParentIdx (treeLevel j) (treePos j (treeLevel j)))
           hpi_lt (by omega) (by omega)
+        have htlp := treeLevel_parent (treeLevel j) (treePos j (treeLevel j)) hl2
+        have htlp1 : treeLevel (treeParentIdx (treeLevel j) (treePos j (treeLevel j))) + 1 =
+          treeLevel j := by omega
+        have htpp : treePos (treeParentIdx (treeLevel j) (treePos j (treeLevel j)))
+          (treeLevel (treeParentIdx (treeLevel j) (treePos j (treeLevel j)))) =
+          treePos j (treeLevel j) % 2 ^ treeLevel j := by
+          rw [htlp]; exact treePos_parent (treeLevel j) (treePos j (treeLevel j)) hl2
+        change ((false ^^ (lupanovCircuit N f hN).wireValue x
+            ⟨N + 1 + treeParentIdx (treeLevel j) (treePos j (treeLevel j)), by omega⟩) &&
+          (!(treePos j (treeLevel j)).testBit (treeLevel j) ^^
+            x ⟨addrBits N + treeLevel j, by omega⟩)) =
+          decide (∀ (i : Fin (treeLevel j + 1)),
+            x ⟨addrBits N + i.val, by have := i.isLt; omega⟩ =
+            (treePos j (treeLevel j)).testBit i.val)
+        rw [Bool.false_xor, hpar]
         sorry
   specialize hsB (2 ^ dataBits N - 4 + y) (by omega) (by omega)
   simp only [show N + 1 + (2 ^ dataBits N - 4 + y) = N + 1 + (2 ^ dataBits N - 4) + y
