@@ -1331,10 +1331,12 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
         simp [htb]
     induction r with
     | zero =>
-      have h_ne0 : oD k q + p * (2 ^ k - 1) ≠ 0 := by positivity
+      have h_ne0 : oD k q + p * (2 ^ k - 1) ≠ 0 := by
+        show oD (addrBits N) (dataBits N) + colPatIdx N f (addrBits N) (dataBits N) (lupKQ N hN)
+          ⟨y, hy⟩ * (2 ^ (addrBits N) - 1) ≠ 0
+        unfold oD oC; omega
       have h_ge_oC : ¬(oD k q + p * (2 ^ k - 1) < oC q) := by
-        show ¬(oD (addrBits N) (dataBits N) + colPatIdx N f (addrBits N) (dataBits N) (lupKQ N hN)
-          ⟨y, hy⟩ * (2 ^ (addrBits N) - 1) < oC (dataBits N))
+        simp only [show k = addrBits N from rfl, show q = dataBits N from rfl] at *
         unfold oD oC; omega
       have h_ge_oD : ¬(oD k q + p * (2 ^ k - 1) < oD k q) := by omega
       have h_lt_oE : oD k q + p * (2 ^ k - 1) < oE k q := by linarith [hoE_lt]
@@ -1344,7 +1346,11 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
       simp only [show N + oD k q + p * (2 ^ k - 1) + 0 - N =
         oD k q + p * (2 ^ k - 1) from by omega]
       rw [dif_neg h_ne0, dif_neg h_ge_oC, dif_neg h_ge_oD, dif_pos h_lt_oE]
-      simp_rw [show (oD k q + p * (2 ^ k - 1) - oD k q) = p * (2 ^ k - 1) from by omega]
+      simp_rw [show oD (addrBits N) (dataBits N) +
+        colPatIdx N f (addrBits N) (dataBits N) (lupKQ N hN) ⟨y, hy⟩ *
+          (2 ^ (addrBits N) - 1) - oD (addrBits N) (dataBits N) =
+        colPatIdx N f (addrBits N) (dataBits N) (lupKQ N hN) ⟨y, hy⟩ *
+          (2 ^ (addrBits N) - 1) from by unfold oD oC; omega]
       simp only [show p * (2 ^ k - 1) / (2 ^ k - 1) = p from Nat.mul_div_cancel p hblk,
         show p * (2 ^ k - 1) % (2 ^ k - 1) = 0 from Nat.mul_mod_right p (2 ^ k - 1)]
       simp only [mkG, Gate.eval, Basis.andOr2, AONOp.eval,
@@ -1355,10 +1361,12 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
       rw [selWire 0 (by omega), selWire 1 (by omega)]
       simp [List.range, List.foldl, Bool.false_or]
     | succ r' ih =>
-      have h_ne0' : oD k q + p * (2 ^ k - 1) + (r' + 1) ≠ 0 := by positivity
+      have h_ne0' : oD k q + p * (2 ^ k - 1) + (r' + 1) ≠ 0 := by
+        show oD (addrBits N) (dataBits N) + colPatIdx N f (addrBits N) (dataBits N) (lupKQ N hN)
+          ⟨y, hy⟩ * (2 ^ (addrBits N) - 1) + (r' + 1) ≠ 0
+        unfold oD oC; omega
       have h_ge_oC' : ¬(oD k q + p * (2 ^ k - 1) + (r' + 1) < oC q) := by
-        show ¬(oD (addrBits N) (dataBits N) + colPatIdx N f (addrBits N) (dataBits N) (lupKQ N hN)
-          ⟨y, hy⟩ * (2 ^ (addrBits N) - 1) + (r' + 1) < oC (dataBits N))
+        simp only [show k = addrBits N from rfl, show q = dataBits N from rfl] at *
         unfold oD oC; omega
       have h_ge_oD' : ¬(oD k q + p * (2 ^ k - 1) + (r' + 1) < oD k q) := by omega
       have h_lt_oE' : oD k q + p * (2 ^ k - 1) + (r' + 1) < oE k q := by linarith [hoE_lt]
