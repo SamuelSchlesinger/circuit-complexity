@@ -1024,7 +1024,32 @@ private theorem wireValue_dataLeaf (N : Nat) [NeZero N]
             x ⟨addrBits N + i.val, by have := i.isLt; omega⟩ =
             (treePos j (treeLevel j)).testBit i.val)
         rw [Bool.false_xor, hpar]
-        sorry
+        rw [Bool.eq_iff_iff, Bool.and_eq_true]
+        constructor
+        · rintro ⟨h1, h2⟩
+          rw [decide_eq_true_eq] at h1 ⊢
+          intro i
+          by_cases hil : i.val < treeLevel j
+          · have h1i := h1 ⟨i.val, by rw [htlp1]; exact hil⟩
+            rw [htpp, Nat.testBit_mod_two_pow] at h1i
+            simp only [show decide (i.val < treeLevel j) = true from
+              decide_eq_true_eq.mpr hil, Bool.true_and] at h1i
+            exact Eq.mpr (by congr 1) h1i
+          · have hi_eq : i.val = treeLevel j := by have := i.isLt; omega
+            have h2' := (show ∀ (a b : Bool), (!b ^^ a) = true → a = b from by decide) _ _ h2
+            exact Eq.mpr (by simp only [hi_eq]) h2'
+        · intro h
+          rw [decide_eq_true_eq] at h
+          refine ⟨?_, ?_⟩
+          · rw [decide_eq_true_eq]
+            intro i
+            rw [htpp, Nat.testBit_mod_two_pow]
+            have hi : i.val < treeLevel j := by omega
+            simp only [show decide (i.val < treeLevel j) = true from
+              decide_eq_true_eq.mpr hi, Bool.true_and]
+            exact Eq.mpr (by congr 1) (h ⟨i.val, by omega⟩)
+          · exact (show ∀ (a b : Bool), a = b → (!b ^^ a) = true from by decide) _ _
+              (Eq.mpr (by congr 1) (h ⟨treeLevel j, by omega⟩))
   specialize hsB (2 ^ dataBits N - 4 + y) (by omega) (by omega)
   simp only [show N + 1 + (2 ^ dataBits N - 4 + y) = N + 1 + (2 ^ dataBits N - 4) + y
     from by omega] at hsB
