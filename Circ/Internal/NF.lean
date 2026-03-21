@@ -868,10 +868,10 @@ theorem wireToACNFTree_depth_le (c : Circuit Basis.unboundedAON N 1 G)
     (w : Fin (N + G)) (pol : Bool) :
     (c.wireToACNFTree w pol).2.depth ≤ c.wireDepth w := by
   by_cases h : w.val < N
-  · rw [wireToACNFTree, dif_pos h]; simp [wireDepth_lt c w h, ACNFTree.depth]
+  · rw [wireToACNFTree, dif_pos h]; simp [inputWireDepth c w h, ACNFTree.depth]
   · have hG : w.val - N < G := by omega
     rw [wireToACNFTree, dif_neg h]; dsimp only []
-    conv_rhs => rw [wireDepth_ge c w h]
+    conv_rhs => rw [gateWireDepth c w h]
     rcases hop : (c.gates ⟨w.val - N, hG⟩).op with _ | _ <;> rcases pol with _ | _ <;>
       dsimp only [] <;> simp only [ACNFTree.depth]
     all_goals (
@@ -908,10 +908,10 @@ theorem wireToACNFTree_leafCount_le (c : Circuit Basis.unboundedAON N 1 G)
     (w : Fin (N + G)) (pol : Bool) :
     (c.wireToACNFTree w pol).2.leafCount ≤ c.maxFanIn ^ c.wireDepth w := by
   by_cases h : w.val < N
-  · rw [wireToACNFTree, dif_pos h]; simp [wireDepth_lt c w h, ACNFTree.leafCount]
+  · rw [wireToACNFTree, dif_pos h]; simp [inputWireDepth c w h, ACNFTree.leafCount]
   · have hG : w.val - N < G := by omega
     rw [wireToACNFTree, dif_neg h]; dsimp only []
-    conv_rhs => rw [wireDepth_ge c w h]
+    conv_rhs => rw [gateWireDepth c w h]
     have lc_ih : ∀ k : Fin (c.gates ⟨w.val - N, hG⟩).fanIn,
         (c.wireToACNFTree ((c.gates ⟨w.val - N, hG⟩).inputs k)
           (pol ^^ (c.gates ⟨w.val - N, hG⟩).negated k)).2.leafCount ≤

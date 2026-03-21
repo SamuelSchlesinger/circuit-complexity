@@ -134,17 +134,15 @@ decreasing_by
   have : (⟨w.val - N, hG⟩ : Fin G).val = w.val - N := rfl
   omega
 
-/-- Primary input wires (index < N) have depth 0.
-The `_lt` suffix refers to the hypothesis `w.val < N`. -/
-@[simp] theorem wireDepth_lt (c : Circuit B N M G)
+/-- Primary input wires (index < N) have depth 0. -/
+@[simp] theorem inputWireDepth (c : Circuit B N M G)
     (w : Fin (N + G)) (h : w.val < N) :
     c.wireDepth w = 0 := by
   unfold wireDepth; simp [h]
 
 /-- Internal gate wires (index ≥ N) have depth 1 + max over their input wires.
-Unfolds one step of `wireDepth` for the gate case.
-The `_ge` suffix refers to the hypothesis `¬ (w.val < N)`, i.e. `w.val ≥ N`. -/
-theorem wireDepth_ge (c : Circuit B N M G)
+Unfolds one step of `wireDepth` for the gate case. -/
+theorem gateWireDepth (c : Circuit B N M G)
     (w : Fin (N + G)) (h : ¬ (w.val < N)) :
     c.wireDepth w =
       1 + Fin.foldl (c.gates ⟨w.val - N, by omega⟩).fanIn
