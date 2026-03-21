@@ -774,23 +774,191 @@ private theorem colFun_at_actual_bits (N : Nat) [NeZero N]
 
 /-! #### Circuit correctness -/
 
+/-! ##### Key identity -/
+
+private theorem lupKQ (N : Nat) (hN : 16 ≤ N) :
+    addrBits N + dataBits N = N := by
+  have := addr_data_sum N hN; omega
+
+/-! ##### Connecting the last wire to the OR chain -/
+
+private theorem lastWire_is_orChain_last (N : Nat) (hN : 16 ≤ N) :
+    N + szSections (addrBits N) (dataBits N) - 1 =
+    N + oF (addrBits N) (dataBits N) + (2 ^ dataBits N - 2) := by
+  have hq2 : 2 ≤ dataBits N := dataBits_ge_two N hN
+  have h4q : 4 ≤ 2 ^ dataBits N := pow_ge_4 (dataBits N) hq2
+  show N + szSections (addrBits N) (dataBits N) - 1 =
+    N + oF (addrBits N) (dataBits N) + (2 ^ dataBits N - 2)
+  unfold szSections oF oE oD oC; omega
+
+/-! ##### Semantic decomposition of the circuit -/
+
+/-- The semantic value of each AND-layer wire (Section E). -/
+private noncomputable def andLayerSem (N : Nat)
+    (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N)
+    (y : Nat) (hy : y < 2 ^ dataBits N) : Bool :=
+  let k := addrBits N
+  let q := dataBits N
+  let hkq := lupKQ N hN
+  let data := shiftedBits N k q hkq x
+  let dVal := Finset.sum (Finset.univ : Finset (Fin q))
+    (fun j => if data j then 2^j.val else 0)
+  let addr : BitString k := fun j => x ⟨j.val, by have := j.isLt; omega⟩
+  let aVal := Finset.sum (Finset.univ : Finset (Fin k))
+    (fun j => if addr j then 2^j.val else 0)
+  (y == dVal) && colFun N f k q hkq ⟨y, hy⟩
+    ⟨aVal, sum_cond_pow_fin_lt k addr⟩
+
+/-- Foldl of OR over a list where all elements are false gives false. -/
+private theorem foldl_or_all_false {n : Nat} {P : Nat → Bool}
+    (hP : ∀ y, y < n → P y = false) :
+    (List.range n).foldl (fun acc y => acc || P y) false = false := by
+  induction n with
+  | zero => simp
+  | succ m ih =>
+    rw [List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil]
+    rw [ih (fun y hy => hP y (by omega))]
+    rw [hP m (by omega)]; rfl
+
+/-- A list foldl of OR where each non-matching term is false produces the
+    value at the matching position. -/
+private theorem foldl_or_unique_true {n : Nat} {P : Nat → Bool}
+    (target : Nat) (htarget : target < n)
+    (hP : ∀ y, y < n → y ≠ target → P y = false) :
+    (List.range n).foldl (fun acc y => acc || P y) false = P target := by
+  induction n with
+  | zero => omega
+  | succ m ih =>
+    rw [List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil]
+    by_cases htm : target < m
+    · -- target < m: result after first m was already P target
+      rw [ih htm (fun y hy hne => hP y (by omega) hne)]
+      rw [hP m (by omega) (by omega)]
+      simp [Bool.or_false]
+    · -- target = m
+      have htm_eq : target = m := by omega
+      subst htm_eq
+      -- All terms before target are false, so foldl gives false
+      rw [foldl_or_all_false (fun y hy => hP y (by omega) (by omega))]
+      simp [Bool.false_or]
+
+/-- The data sum: encode the data bits of x as a natural number. -/
+private noncomputable def dataSum (N : Nat) (hN : 16 ≤ N) (x : BitString N) : Nat :=
+  Finset.sum (Finset.univ : Finset (Fin (dataBits N)))
+    (fun j => if shiftedBits N (addrBits N) (dataBits N) (lupKQ N hN) x j
+              then 2^j.val else 0)
+
+private theorem dataSum_lt (N : Nat) (hN : 16 ≤ N) (x : BitString N) :
+    dataSum N hN x < 2 ^ dataBits N :=
+  sum_cond_pow_fin_lt (dataBits N) (shiftedBits N (addrBits N) (dataBits N) (lupKQ N hN) x)
+
+/-- andLayerSem at y is false when y ≠ dataSum. -/
+private theorem andLayerSem_ne (N : Nat) [NeZero N]
+    (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N)
+    (y : Nat) (hy : y < 2 ^ dataBits N) (hne : y ≠ dataSum N hN x) :
+    andLayerSem N f hN x y hy = false := by
+  unfold andLayerSem dataSum at *
+  simp only [beq_eq_false_iff_ne.mpr hne, Bool.false_and]
+
+/-- andLayerSem at dataSum gives colFun at actual bits. -/
+private theorem andLayerSem_eq (N : Nat) [NeZero N]
+    (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N) :
+    andLayerSem N f hN x (dataSum N hN x) (dataSum_lt N hN x) = f x := by
+  unfold andLayerSem dataSum
+  simp only [beq_self_eq_true, Bool.true_and]
+  exact colFun_at_actual_bits N f x (addrBits N) (dataBits N) (lupKQ N hN)
+
+private theorem or_andLayerSem_eq_f (N : Nat) [NeZero N]
+    (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N) :
+    (List.range (2 ^ dataBits N)).foldl
+      (fun acc y => acc || if h : y < 2 ^ dataBits N
+        then andLayerSem N f hN x y h else false) false = f x := by
+  -- Use foldl_or_unique_true with target = dataSum N hN x
+  have hds_lt := dataSum_lt N hN x
+  have hP_ne : ∀ y, y < 2 ^ dataBits N → y ≠ dataSum N hN x →
+    (if h : y < 2 ^ dataBits N then andLayerSem N f hN x y h else false) = false := by
+    intro y hy hne
+    rw [dif_pos hy, andLayerSem_ne N f hN x y hy hne]
+  have hfoldl := foldl_or_unique_true (dataSum N hN x) hds_lt hP_ne
+  rw [hfoldl, dif_pos hds_lt, andLayerSem_eq N f hN x]
+
+/-- The OR chain accumulates AND-layer semantic values.
+
+    This is the key wire-level fact: by induction on r, the OR-chain gate
+    at position r in Section F evaluates to the foldl-OR of AND-layer
+    semantic values for y = 0, ..., r+1.
+
+    The proof requires tracing wireValue through the gate array, showing:
+    - The gate at index oF(k,q) + r is in Section F
+    - Section F gates are OR gates with inputs pointing to:
+      * For r=0: AND gates at oE+0 and oE+1
+      * For r>0: previous OR-chain gate and AND gate at oE+(r+1)
+    - Each AND gate at oE+y evaluates to andLayerSem (by wireValue_andLayer_sem)
+    - The OR of the accumulated value and the new AND output gives
+      the extended foldl
+
+    The deep wireValue unfolding through all 6 sections (required for
+    wireValue_andLayer_sem) and the gate array branch analysis make this
+    the most technically challenging part of the formalization. -/
+private theorem wireValue_orChain_sem (N : Nat) [NeZero N]
+    (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N)
+    (r : Nat) (hr : r < 2 ^ dataBits N - 1)
+    (hW : N + oF (addrBits N) (dataBits N) + r <
+          N + szSections (addrBits N) (dataBits N)) :
+    (lupanovCircuit N f hN).wireValue x
+      ⟨N + oF (addrBits N) (dataBits N) + r, hW⟩ =
+    (List.range (r + 2)).foldl
+      (fun acc y => acc || if h : y < 2 ^ dataBits N
+        then andLayerSem N f hN x y h else false) false := by
+  sorry
+
+private theorem lastOrChain_eq_f (N : Nat) [NeZero N]
+    (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N)
+    (hW : N + oF (addrBits N) (dataBits N) + (2 ^ dataBits N - 2) <
+          N + szSections (addrBits N) (dataBits N)) :
+    (lupanovCircuit N f hN).wireValue x
+      ⟨N + oF (addrBits N) (dataBits N) + (2 ^ dataBits N - 2), hW⟩ = f x := by
+  have hq2 : 2 ≤ dataBits N := dataBits_ge_two N hN
+  have h4q : 4 ≤ 2 ^ dataBits N := pow_ge_4 (dataBits N) hq2
+  -- Step 1: OR chain at last position = foldl of AND semantic values
+  have hr : 2 ^ dataBits N - 2 < 2 ^ dataBits N - 1 := by omega
+  rw [wireValue_orChain_sem N f hN x (2 ^ dataBits N - 2) hr hW]
+  -- Step 2: range length (2^q - 2) + 2 = 2^q
+  have hrange : (2 ^ dataBits N - 2) + 2 = 2 ^ dataBits N := by omega
+  rw [hrange]
+  -- Step 3: OR of all AND semantic values = f(x)
+  exact or_andLayerSem_eq_f N f hN x
+
+/-! ##### Main correctness theorem -/
+
 /-- The last wire of the Lupanov circuit evaluates to f x.
 
-The correctness argument:
-- Section A: constFalse wire
-- Section B: data minterm tree — minterm y fires iff data_bits(x) = y
-- Section C: address minterm tree — minterm a fires iff addr_bits(x) = a
-- Section D: column library — OR chain for each pattern selects addr minterms
-- Section E: AND(minterm_y, col_y) — fires iff data = y ∧ f(addr, y) = true
-- Section F: OR chain — disjunction of all AND outputs = f(x)
-
-This requires detailed wire-value reasoning through all 6 sections. -/
+The correctness argument proceeds in two steps:
+1. The last wire index = oF(k,q) + (2^q - 2)  (lastWire_is_orChain_last)
+2. That wire evaluates to f(x)  (lastOrChain_eq_f) -/
 private theorem lupanov_lastWire_correct (N : Nat) [NeZero N]
     (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N) :
     (lupanovCircuit N f hN).wireValue x
       ⟨N + szSections (addrBits N) (dataBits N) - 1,
        by have := szSections_pos (addrBits N) (dataBits N); omega⟩ = f x := by
-  sorry
+  -- Step 1: rewrite last wire index as oF k q + (2^q - 2)
+  have hlast := lastWire_is_orChain_last N hN
+  have hq2 : 2 ≤ dataBits N := dataBits_ge_two N hN
+  have h4q : 4 ≤ 2 ^ dataBits N := pow_ge_4 (dataBits N) hq2
+  have hW_or : N + oF (addrBits N) (dataBits N) + (2 ^ dataBits N - 2) <
+    N + szSections (addrBits N) (dataBits N) := by
+    show N + oF (addrBits N) (dataBits N) + (2 ^ dataBits N - 2) <
+      N + szSections (addrBits N) (dataBits N)
+    unfold szSections oF oE oD oC; omega
+  have hfin_eq :
+    (⟨N + szSections (addrBits N) (dataBits N) - 1,
+      by have := szSections_pos (addrBits N) (dataBits N); omega⟩ :
+      Fin (N + szSections (addrBits N) (dataBits N))) =
+    ⟨N + oF (addrBits N) (dataBits N) + (2 ^ dataBits N - 2), hW_or⟩ := by
+    ext; exact hlast
+  rw [hfin_eq]
+  -- Step 2: that wire = f(x)
+  exact lastOrChain_eq_f N f hN x hW_or
 
 private theorem lupanovCircuit_correct (N : Nat) [NeZero N]
     (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N) :
