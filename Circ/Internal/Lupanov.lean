@@ -208,10 +208,59 @@ private theorem term2 (N : Nat) (hN : 16 ≤ N) :
       ≤ N * N := by apply Nat.mul_le_mul_right; exact two_mul_pow_addr_le N hN
     _ ≤ 2 ^ N := sq_le_pow N hN
 
+/-- `4k ≤ 2^k` for `k ≥ 4`. -/
+private theorem pow_ge_four_mul (k : Nat) (hk : 4 ≤ k) : 4 * k ≤ 2 ^ k := by
+  induction k with
+  | zero => omega
+  | succ n ih =>
+    cases Nat.lt_or_ge n 4 with
+    | inl h => interval_cases n <;> omega
+    | inr h =>
+      have := ih (by omega)
+      calc 4 * (n + 1) = 4 * n + 4 := by ring
+        _ ≤ 2 ^ n + 4 := by omega
+        _ ≤ 2 ^ n + 2 ^ n := by nlinarith [@Nat.lt_pow_self n 2 (by omega)]
+        _ = 2 ^ (n + 1) := by ring
+
+/-- `4 · log₂ N ≤ N` for `N ≥ 16`. Follows from `4k ≤ 2^k ≤ N` with `k = log₂ N`. -/
+private theorem log_le_quarter (N : Nat) (hN : 16 ≤ N) : 4 * Nat.log 2 N ≤ N := by
+  have hlog4 : 4 ≤ Nat.log 2 N := Nat.le_log_of_pow_le (by omega) (by omega)
+  calc 4 * Nat.log 2 N
+      ≤ 2 ^ Nat.log 2 N := pow_ge_four_mul (Nat.log 2 N) hlog4
+    _ ≤ N := Nat.pow_log_le_self 2 (by omega)
+
+/-- The exponent `2^k + k` is small enough that `N` fits in the remaining bits. -/
+private theorem pow_addr_plus_addr_le (N : Nat) (hN : 16 ≤ N) :
+    2 ^ addrBits N + addrBits N + (Nat.log 2 N + 1) ≤ N := by
+  unfold addrBits
+  have hlog1 : 1 ≤ Nat.log 2 N := Nat.le_log_of_pow_le (by omega) (by omega)
+  have : 2 * 2 ^ (Nat.log 2 N - 1) = 2 ^ Nat.log 2 N := by
+    conv_rhs => rw [show Nat.log 2 N = (Nat.log 2 N - 1) + 1 from by omega]
+    rw [Nat.pow_succ]; ring
+  have : 2 * 2 ^ (Nat.log 2 N - 1) ≤ N := by
+    rw [this]; exact Nat.pow_log_le_self 2 (by omega)
+  have := log_le_quarter N hN
+  omega
+
 /-- `2^(2^k + k) · N ≤ 2^N` for `N ≥ 16` -/
 private theorem term3 (N : Nat) (hN : 16 ≤ N) :
     2 ^ (2 ^ addrBits N + addrBits N) * N ≤ 2 ^ N := by
-  sorry
+  have hkey := pow_addr_plus_addr_le N hN
+  have hsub : Nat.log 2 N + 1 ≤ N - (2 ^ addrBits N + addrBits N) := by omega
+  have hN_lt : N < 2 ^ (N - (2 ^ addrBits N + addrBits N)) :=
+    calc N < 2 ^ (Nat.log 2 N + 1) := Nat.lt_pow_succ_log_self (by omega) N
+      _ ≤ 2 ^ (N - (2 ^ addrBits N + addrBits N)) := Nat.pow_le_pow_right (by omega) hsub
+  have hsplit : 2 ^ (2 ^ addrBits N + addrBits N) *
+      2 ^ (N - (2 ^ addrBits N + addrBits N)) = 2 ^ N := by
+    rw [← Nat.pow_add]; congr 1; omega
+  calc 2 ^ (2 ^ addrBits N + addrBits N) * N
+      ≤ 2 ^ (2 ^ addrBits N + addrBits N) *
+        (2 ^ (N - (2 ^ addrBits N + addrBits N)) - 1) := by
+        apply Nat.mul_le_mul_left; omega
+    _ ≤ 2 ^ (2 ^ addrBits N + addrBits N) *
+        2 ^ (N - (2 ^ addrBits N + addrBits N)) := by
+        apply Nat.mul_le_mul_left; omega
+    _ = 2 ^ N := hsplit
 
 /-- `N ≤ 2^N` -/
 private theorem n_le_pow (N : Nat) : N ≤ 2 ^ N := by
