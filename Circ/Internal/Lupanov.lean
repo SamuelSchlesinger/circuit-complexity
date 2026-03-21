@@ -1108,7 +1108,46 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
         if (x ⟨j.val, by have := j.isLt; have := addr_le_N N hN; omega⟩) = true
         then 2 ^ j.val else 0),
        sum_cond_pow_fin_lt (addrBits N) (fun j =>
-        x ⟨j.val, by have := j.isLt; have := addr_le_N N hN; omega⟩)⟩ := by sorry
+        x ⟨j.val, by have := j.isLt; have := addr_le_N N hN; omega⟩)⟩ := by
+  have hk3 := addrBits_ge_three N hN
+  have hq2 := dataBits_ge_two N hN
+  have h4k := pow_ge_4 (addrBits N) (by omega)
+  have hkq := lupKQ N hN
+  set k := addrBits N
+  set q := dataBits N
+  set p := colPatIdx N f k q hkq ⟨y, hy⟩
+  set addr : BitString k := fun j => x ⟨j.val, by have := j.isLt; omega⟩
+  set aSum := Finset.sum Finset.univ (fun j : Fin k => if addr j then 2 ^ j.val else 0)
+  have hp_lt : p < 2 ^ (2 ^ k) := colPatIdx_lt N f k q hkq ⟨y, hy⟩
+  have haSum_lt : aSum < 2 ^ k := sum_cond_pow_fin_lt k addr
+  have hblk : 0 < 2 ^ k - 1 := by omega
+  have addrLeaf : ∀ (a : Nat) (ha : a < 2 ^ k)
+      (haW : N + oC q + (2 ^ k - 4) + a < N + szSections k q),
+      (lupanovCircuit N f hN).wireValue x
+        ⟨N + oC q + (2 ^ k - 4) + a, haW⟩ = decide (a = aSum) := by
+    sorry
+  have constFalse_wire : ∀ (hW : N < N + szSections k q),
+      (lupanovCircuit N f hN).wireValue x ⟨N, hW⟩ = false := by
+    sorry
+  have colChain : ∀ (r : Nat) (hr : r < 2 ^ k - 1)
+      (hrW : N + oD k q + p * (2 ^ k - 1) + r < N + szSections k q),
+      (lupanovCircuit N f hN).wireValue x
+        ⟨N + oD k q + p * (2 ^ k - 1) + r, hrW⟩ =
+      (List.range (r + 2)).foldl
+        (fun acc a => acc || (Nat.testBit p a && decide (a = aSum))) false := by
+    sorry
+  change (lupanovCircuit N f hN).wireValue x
+    ⟨N + oD k q + p * (2 ^ k - 1) + (2 ^ k - 2), by omega⟩ = _
+  rw [colChain (2 ^ k - 2) (by omega) (by omega)]
+  rw [show (2 ^ k - 2) + 2 = 2 ^ k from by omega]
+  have hfold := foldl_or_unique_true aSum haSum_lt
+    (P := fun a => Nat.testBit p a && decide (a = aSum))
+    (fun a _ hne => by simp [show ¬(a = aSum) from hne])
+  rw [hfold]; simp
+  change (colPatIdx N f k q hkq ⟨y, hy⟩).testBit aSum = _
+  unfold colPatIdx
+  rw [encodeCol]
+  rw [testBit_sum_cond_pow_fin (2 ^ k) _ aSum haSum_lt]
 
 /-! ### OR chain induction
 
