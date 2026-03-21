@@ -1340,26 +1340,34 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
         unfold oD oC; omega
       have h_ge_oD : ¬(oD k q + p * (2 ^ k - 1) < oD k q) := by omega
       have h_lt_oE : oD k q + p * (2 ^ k - 1) < oE k q := by linarith [hoE_lt]
-      rw [Circuit.wireValue_ge _ _ _ (by omega)]
+      rw [Circuit.wireValue_ge _ _ _ (by
+        show ¬(N + oD k q + p * (2 ^ k - 1) + 0 < N); omega)]
       change (lupanovGateArray N f hN ⟨_, _⟩).val.eval _ = _
       unfold lupanovGateArray
       simp only [show N + oD k q + p * (2 ^ k - 1) + 0 - N =
         oD k q + p * (2 ^ k - 1) from by omega]
       rw [dif_neg h_ne0, dif_neg h_ge_oC, dif_neg h_ge_oD, dif_pos h_lt_oE]
-      simp_rw [show oD (addrBits N) (dataBits N) +
-        colPatIdx N f (addrBits N) (dataBits N) (lupKQ N hN) ⟨y, hy⟩ *
-          (2 ^ (addrBits N) - 1) - oD (addrBits N) (dataBits N) =
-        colPatIdx N f (addrBits N) (dataBits N) (lupKQ N hN) ⟨y, hy⟩ *
-          (2 ^ (addrBits N) - 1) from by unfold oD oC; omega]
-      simp only [show p * (2 ^ k - 1) / (2 ^ k - 1) = p from Nat.mul_div_cancel p hblk,
-        show p * (2 ^ k - 1) % (2 ^ k - 1) = 0 from Nat.mul_mod_right p (2 ^ k - 1)]
+      simp only [show addrBits N = k from rfl, show dataBits N = q from rfl,
+        show colPatIdx N f k q (lupKQ N hN) ⟨y, hy⟩ = p from rfl]
+      simp only [show oD k q + p * (2 ^ k - 1) - oD k q =
+        p * (2 ^ k - 1) from by omega]
+      simp_rw [show p * (2 ^ k - 1) % (2 ^ k - 1) = 0 from by
+        rw [Nat.mul_comm]; exact Nat.mul_mod_right _ _]
+      simp only [show p * (2 ^ k - 1) / (2 ^ k - 1) = p from Nat.mul_div_cancel p hblk]
       simp only [mkG, Gate.eval, Basis.andOr2, AONOp.eval,
         Fin.foldl_succ_last, Fin.foldl_zero, Bool.false_or]
       simp only [Fin.val_last, Fin.val_castSucc, ite_true, ite_false,
         show ¬((1 : Nat) = 0) from by omega, Bool.false_xor,
         show (0 : Nat) + 1 = 1 from by omega]
-      rw [selWire 0 (by omega), selWire 1 (by omega)]
-      simp [List.range, List.foldl, Bool.false_or]
+      conv_rhs => rw [show (0 : Nat) + 2 = 2 from rfl,
+        show (2 : Nat) = 1 + 1 from rfl, List.range_succ,
+        show (1 : Nat) = 0 + 1 from rfl, List.range_succ, List.range_zero]
+      simp only [List.nil_append, List.foldl_append, List.foldl_cons, List.foldl_nil, Bool.false_or]
+      congr 1 <;> split_ifs with htb
+      · simp only [htb, Bool.true_and]; exact addrLeaf _ (by omega) _
+      · simp only [Bool.eq_false_iff.mpr htb, Bool.false_and]; exact constFalse_wire _
+      · simp only [htb, Bool.true_and]; exact addrLeaf _ (by omega) _
+      · simp only [Bool.eq_false_iff.mpr htb, Bool.false_and]; exact constFalse_wire _
     | succ r' ih =>
       have h_ne0' : oD k q + p * (2 ^ k - 1) + (r' + 1) ≠ 0 := by
         show oD (addrBits N) (dataBits N) + colPatIdx N f (addrBits N) (dataBits N) (lupKQ N hN)
@@ -1377,12 +1385,16 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
       simp only [show N + oD k q + p * (2 ^ k - 1) + (r' + 1) - N =
         oD k q + p * (2 ^ k - 1) + (r' + 1) from by omega]
       rw [dif_neg h_ne0', dif_neg h_ge_oC', dif_neg h_ge_oD', dif_pos h_lt_oE']
+      simp only [show addrBits N = k from rfl, show dataBits N = q from rfl,
+        show colPatIdx N f k q (lupKQ N hN) ⟨y, hy⟩ = p from rfl]
       simp_rw [show (oD k q + p * (2 ^ k - 1) + (r' + 1) - oD k q) =
         p * (2 ^ k - 1) + (r' + 1) from by omega]
       simp only [show (p * (2 ^ k - 1) + (r' + 1)) / (2 ^ k - 1) = p from
-        Nat.div_eq_of_lt_le (by omega) (by omega),
-        show (p * (2 ^ k - 1) + (r' + 1)) % (2 ^ k - 1) = r' + 1 from
-        Nat.mod_eq_of_lt (by omega)]
+        Nat.div_eq_of_lt_le (by omega)
+          (show p * (2 ^ k - 1) + (r' + 1) < (p + 1) * (2 ^ k - 1) by nlinarith),
+        show (p * (2 ^ k - 1) + (r' + 1)) % (2 ^ k - 1) = r' + 1 from by
+          rw [show p * (2 ^ k - 1) + (r' + 1) = (r' + 1) + (2 ^ k - 1) * p from by ring,
+              Nat.add_mul_mod_self_left]; exact Nat.mod_eq_of_lt (by omega)]
       simp only [show r' + 1 ≠ 0 from by omega, ite_false,
         show r' + 1 - 1 = r' from by omega]
       simp only [mkG, Gate.eval, Basis.andOr2, AONOp.eval,
@@ -1390,17 +1402,13 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
       simp only [Fin.val_last, Fin.val_castSucc, ite_true, ite_false,
         show ¬((1 : Nat) = 0) from by omega, Bool.false_xor,
         show r' + 1 + 1 = r' + 2 from by omega]
-      show ((lupanovCircuit N f hN).wireValue x
-        ⟨N + oD k q + p * (2 ^ k - 1) + r', by omega⟩ ||
-        (if Nat.testBit p (r' + 2) then
-          (lupanovCircuit N f hN).wireValue x
-            ⟨N + oC q + (2 ^ k - 4) + (r' + 2), hsel_bound (r' + 2) (by omega)⟩
-         else
-          (lupanovCircuit N f hN).wireValue x ⟨N, by linarith [hsel_bound (r' + 2) (by omega)]⟩)) =
-        _
-      rw [ih (by omega) (by omega), selWire (r' + 2) (by omega)]
-      rw [show r' + 2 + 1 = (r' + 1) + 2 from by omega,
+      conv_rhs => rw [show r' + 2 + 1 = (r' + 1) + 2 from by omega,
         List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil]
+      congr 1
+      · exact ih (by omega) (by omega)
+      · split_ifs with htb2
+        · simp only [htb2, Bool.true_and]; exact addrLeaf _ (by omega) _
+        · simp only [Bool.eq_false_iff.mpr htb2, Bool.false_and]; exact constFalse_wire _
   change (lupanovCircuit N f hN).wireValue x
     ⟨N + oD k q + p * (2 ^ k - 1) + (2 ^ k - 2), by omega⟩ = _
   rw [colChain (2 ^ k - 2) (by omega) (by omega)]
@@ -1493,12 +1501,18 @@ private theorem wireValue_orChain_sem (N : Nat) [NeZero N]
       Fin.val_last, Fin.val_castSucc, ite_false,
       show (0 : Nat) = 0 from rfl, show ¬((1 : Nat) = 0) from by omega,
       show (0 : Nat) + 1 = 1 from by omega]
-    simp only [andLayer_sem,
-      List.range, List.foldl, Bool.false_or,
-      dif_pos (show 0 < 2 ^ dataBits N from by omega),
+    show ((lupanovCircuit N f hN).wireValue x
+        ⟨N + oE (addrBits N) (dataBits N) + 0, by linarith⟩ ||
+      (lupanovCircuit N f hN).wireValue x
+        ⟨N + oE (addrBits N) (dataBits N) + 1, by linarith⟩) =
+      List.foldl (fun acc y => acc || if h : y < 2 ^ dataBits N
+        then andLayerSem N f hN x y h else false) false (List.range (0 + 2))
+    rw [andLayer_sem 0 (by omega) (by linarith),
+        andLayer_sem 1 (by omega) (by linarith)]
+    simp only [show List.range (0 + 2) = [0, 1] from by decide,
+      List.foldl_cons, List.foldl_nil,
+      Bool.false_or, dif_pos (show 0 < 2 ^ dataBits N from by omega),
       dif_pos (show 1 < 2 ^ dataBits N from by omega)]
-    try rfl
-    sorry
   | succ r' ih =>
     set_option maxHeartbeats 3200000 in
     rw [Circuit.wireValue_ge _ _ _ (show ¬((⟨N + oF (addrBits N) (dataBits N) + (r' + 1), hW⟩ :
