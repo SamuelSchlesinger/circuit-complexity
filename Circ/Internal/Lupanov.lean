@@ -398,7 +398,7 @@ theorem encodeCol_lt (k : Nat) (col : Fin (2^k) → Bool) :
   unfold encodeCol
   calc Finset.sum Finset.univ (fun j : Fin (2^k) => if col j then 2 ^ j.val else 0)
       ≤ Finset.sum Finset.univ (fun j : Fin (2^k) => 2 ^ j.val) := by
-        apply Finset.sum_le_sum; intro j _; split_ifs <;> simp [Nat.zero_le, le_refl]
+        apply Finset.sum_le_sum; intro j _; split_ifs <;> simp
     _ < 2 ^ (2^k) := sum_pow_two_lt (2^k)
 
 noncomputable def colFun (N : Nat) (f : BitString N → Bool)
@@ -653,10 +653,153 @@ private noncomputable def lupanovCircuit (N : Nat) [NeZero N]
 
 /-! ### Correctness -/
 
+/-! #### Bit-vector testBit lemma -/
+
+/-- The sum Σ_{j < k} (if b j then 2^j else 0) has no overlap between
+    powers, so it is bounded by 2^k. -/
+private lemma sum_cond_pow_range_lt (k : Nat) (b : Nat → Bool) :
+    Finset.sum (Finset.range k) (fun j => if b j then 2^j else 0) < 2^k := by
+  induction k with
+  | zero => simp
+  | succ n ih =>
+    rw [Finset.sum_range_succ]
+    have : (if b n then 2^n else 0) ≤ 2^n := by split_ifs <;> omega
+    calc _ < 2^n + 2^n := by omega
+      _ = 2^(n+1) := by ring
+
+/-- testBit of a sum of conditional powers of 2 (range version). -/
+private theorem testBit_sum_cond_pow_range (k : Nat) (b : Nat → Bool)
+    (i : Nat) (hi : i < k) :
+    Nat.testBit (Finset.sum (Finset.range k)
+      (fun j => if b j then 2^j else 0)) i = b i := by
+  induction k with
+  | zero => omega
+  | succ n ih =>
+    rw [Finset.sum_range_succ]
+    have hS_lt := sum_cond_pow_range_lt n b
+    by_cases hi_n : i < n
+    · split_ifs with hbn
+      · rw [Nat.add_comm, Nat.testBit_two_pow_add_gt (by omega)]; exact ih hi_n
+      · simp only [Nat.add_zero]; exact ih hi_n
+    · have hi_eq : i = n := by omega
+      subst hi_eq
+      split_ifs with hbn
+      · rw [Nat.add_comm, Nat.testBit_two_pow_add_eq, Nat.testBit_lt_two_pow hS_lt]; simp [hbn]
+      · simp only [Nat.add_zero]; rw [Nat.testBit_lt_two_pow hS_lt]
+        exact (Bool.eq_false_iff.mpr hbn).symm
+
+/-- Bound on conditional-power sum over Fin. -/
+private lemma sum_cond_pow_fin_lt (k : Nat) (b : BitString k) :
+    Finset.sum (Finset.univ : Finset (Fin k))
+      (fun j => if b j then 2^j.val else 0) < 2^k :=
+  calc _ ≤ Finset.sum Finset.univ (fun j : Fin k => 2^j.val) := by
+        apply Finset.sum_le_sum; intro j _; split_ifs <;> simp
+    _ < 2^k := sum_pow_two_lt k
+
+/-- testBit of a conditional-power sum over Fin k recovers the bit. -/
+private theorem testBit_sum_cond_pow_fin (k : Nat) (b : BitString k) (i : Nat) (hi : i < k) :
+    Nat.testBit (Finset.sum (Finset.univ : Finset (Fin k))
+      (fun j => if b j then 2^j.val else 0)) i = b ⟨i, hi⟩ := by
+  -- Prove by induction on k using a helper with ∀ quantifiers
+  suffices h : ∀ (kk : Nat) (bb : BitString kk) (ii : Nat) (hii : ii < kk),
+    Nat.testBit (Finset.sum (Finset.univ : Finset (Fin kk))
+      (fun j => if bb j then 2^j.val else 0)) ii = bb ⟨ii, hii⟩ from h k b i hi
+  intro kk
+  induction kk with
+  | zero => intro _ ii hii; omega
+  | succ n ih =>
+    intro bb ii hii
+    rw [Fin.sum_univ_castSucc]
+    have hcast : ∀ j : Fin n,
+      (if bb (Fin.castSucc j) then 2 ^ (Fin.castSucc j).val else 0) =
+      (if bb (Fin.castSucc j) then 2 ^ j.val else 0) := by
+      intro j; simp [Fin.val_castSucc]
+    simp_rw [hcast]
+    set S := Finset.sum Finset.univ
+      (fun j : Fin n => if bb (Fin.castSucc j) then 2^j.val else 0)
+    have hS_lt : S < 2^n := sum_cond_pow_fin_lt n (fun j => bb (Fin.castSucc j))
+    by_cases hi_n : ii < n
+    · -- ii < n: the last term (power 2^n) doesn't affect testBit at position ii
+      by_cases hbn : bb (Fin.last n)
+      · simp only [hbn, ite_true, Fin.val_last]
+        rw [Nat.add_comm, Nat.testBit_two_pow_add_gt (by omega)]
+        exact ih (fun j => bb (Fin.castSucc j)) ii hi_n
+      · simp only [hbn, Fin.val_last]
+        exact ih (fun j => bb (Fin.castSucc j)) ii hi_n
+    · -- ii = n
+      have hii_eq : ii = n := by omega
+      subst hii_eq
+      have hlast_eq : (Fin.last ii : Fin (ii + 1)) = ⟨ii, hii⟩ := by ext; simp [Fin.val_last]
+      by_cases hbn : bb (Fin.last ii)
+      · simp only [hbn, ite_true, Fin.val_last]
+        rw [Nat.add_comm, Nat.testBit_two_pow_add_eq, Nat.testBit_lt_two_pow hS_lt, Bool.not_false]
+        rw [hlast_eq] at hbn; exact hbn.symm
+      · simp only [hbn, ite_false, Fin.val_last, Nat.add_zero, Bool.false_eq_true]
+        rw [Nat.testBit_lt_two_pow hS_lt]
+        rw [hlast_eq] at hbn
+        exact (Bool.eq_false_iff.mpr hbn).symm
+
+/-! #### colFun reconstruction lemma -/
+
+/-- Shift the data bits of x to form a q-bit function. -/
+private def shiftedBits (N k q : Nat) (hkq : k + q = N) (x : BitString N) :
+    BitString q :=
+  fun j => x ⟨k + j.val, by have := j.isLt; omega⟩
+
+/-- colFun at the actual bit-vector address/data values equals f(x). -/
+private theorem colFun_at_actual_bits (N : Nat) [NeZero N]
+    (f : BitString N → Bool) (x : BitString N)
+    (k q : Nat) (hkq : k + q = N) :
+    let addr : BitString k := fun j => x ⟨j.val, by have := j.isLt; omega⟩
+    let data := shiftedBits N k q hkq x
+    let aSum := Finset.sum (Finset.univ : Finset (Fin k))
+      (fun j => if addr j then 2^j.val else 0)
+    let dSum := Finset.sum (Finset.univ : Finset (Fin q))
+      (fun j => if data j then 2^j.val else 0)
+    colFun N f k q hkq
+      ⟨dSum, sum_cond_pow_fin_lt q data⟩
+      ⟨aSum, sum_cond_pow_fin_lt k addr⟩ = f x := by
+  simp only
+  unfold colFun shiftedBits
+  dsimp only
+  congr 1
+  funext ⟨idx, hidx⟩
+  dsimp only
+  split_ifs with h
+  · exact testBit_sum_cond_pow_fin k _ idx h
+  · have hq_bound : idx - k < q := by omega
+    rw [testBit_sum_cond_pow_fin q _ (idx - k) hq_bound]
+    dsimp only
+    congr 1; ext; simp; omega
+
+/-! #### Circuit correctness -/
+
+/-- The last wire of the Lupanov circuit evaluates to f x.
+
+The correctness argument:
+- Section A: constFalse wire
+- Section B: data minterm tree — minterm y fires iff data_bits(x) = y
+- Section C: address minterm tree — minterm a fires iff addr_bits(x) = a
+- Section D: column library — OR chain for each pattern selects addr minterms
+- Section E: AND(minterm_y, col_y) — fires iff data = y ∧ f(addr, y) = true
+- Section F: OR chain — disjunction of all AND outputs = f(x)
+
+This requires detailed wire-value reasoning through all 6 sections. -/
+private theorem lupanov_lastWire_correct (N : Nat) [NeZero N]
+    (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N) :
+    (lupanovCircuit N f hN).wireValue x
+      ⟨N + szSections (addrBits N) (dataBits N) - 1,
+       by have := szSections_pos (addrBits N) (dataBits N); omega⟩ = f x := by
+  sorry
+
 private theorem lupanovCircuit_correct (N : Nat) [NeZero N]
     (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N) :
     ((lupanovCircuit N f hN).eval x) 0 = f x := by
-  sorry
+  -- eval at output 0 = outputs-gate.eval(wireValue)
+  simp only [Circuit.eval, lupanovCircuit, Gate.eval, Basis.andOr2]
+  rw [AONOp.eval_two_or]
+  simp only [Bool.false_xor, Bool.or_self]
+  exact lupanov_lastWire_correct N f hN x
 
 private theorem szSections_le_bound (N : Nat) (hN : 16 ≤ N) :
     szSections (addrBits N) (dataBits N) ≤
