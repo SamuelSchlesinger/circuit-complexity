@@ -910,6 +910,27 @@ private theorem wireValue_orChain_sem (N : Nat) [NeZero N]
     (List.range (r + 2)).foldl
       (fun acc y => acc || if h : y < 2 ^ dataBits N
         then andLayerSem N f hN x y h else false) false := by
+  set_option maxHeartbeats 1600000 in
+  have hge : ¬((⟨N + oF (addrBits N) (dataBits N) + r, hW⟩ : Fin _).val < N) := by
+    show ¬(N + oF (addrBits N) (dataBits N) + r < N); omega
+  rw [Circuit.wireValue_ge _ _ _ hge]
+  simp only [lupanovCircuit]
+  unfold lupanovGateArray
+  simp only [show N + oF (addrBits N) (dataBits N) + r - N =
+    oF (addrBits N) (dataBits N) + r from by omega]
+  have hk3 := addrBits_ge_three N hN
+  have hq2 := dataBits_ge_two N hN
+  have h4q := pow_ge_4 (dataBits N) hq2
+  rw [dif_neg (show ¬(oF (addrBits N) (dataBits N) + r = 0) from by
+    unfold oF oE oD oC; omega)]
+  rw [dif_neg (show ¬(oF (addrBits N) (dataBits N) + r < oC (dataBits N)) from by
+    unfold oF oE oD oC; omega)]
+  rw [dif_neg (show ¬(oF (addrBits N) (dataBits N) + r < oD (addrBits N) (dataBits N)) from by
+    unfold oF oE oD; omega)]
+  rw [dif_neg (show ¬(oF (addrBits N) (dataBits N) + r < oE (addrBits N) (dataBits N)) from by
+    unfold oF oE; omega)]
+  rw [dif_neg (show ¬(oF (addrBits N) (dataBits N) + r < oF (addrBits N) (dataBits N)) from by
+    omega)]
   sorry
 
 private theorem lastOrChain_eq_f (N : Nat) [NeZero N]
