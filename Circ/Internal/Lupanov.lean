@@ -1065,8 +1065,32 @@ private theorem wireValue_dataLeaf (N : Nat) [NeZero N]
     unfold treePos treeBase
     have : dataBits N - 1 + 1 = dataBits N := by omega
     rw [this]; omega
-  simp only [htl_leaf, htp_leaf, show dataBits N - 1 + 1 = dataBits N from by omega]
-  sorry
+  conv_lhs => rw [show treePos (2 ^ dataBits N - 4 + y)
+      (treeLevel (2 ^ dataBits N - 4 + y)) = y from by rw [htl_leaf]; exact htp_leaf]
+  have hFin_eq : treeLevel (2 ^ dataBits N - 4 + y) + 1 = dataBits N := by
+    rw [htl_leaf]; omega
+  set data := shiftedBits N (addrBits N) (dataBits N) (lupKQ N hN) x
+  set dSum := Finset.sum Finset.univ (fun j : Fin (dataBits N) =>
+    if data j then 2 ^ j.val else 0)
+  rw [Bool.eq_iff_iff]
+  simp only [decide_eq_true_eq, beq_iff_eq]
+  constructor
+  · intro h
+    apply Nat.eq_of_testBit_eq
+    intro i
+    by_cases hi : i < dataBits N
+    · rw [testBit_sum_cond_pow_fin (dataBits N) data i hi]
+      exact Eq.mpr (by congr 1) (h ⟨i, by omega⟩).symm
+    · have : y < 2 ^ i := lt_of_lt_of_le hy (Nat.pow_le_pow_right (by omega) (by omega))
+      have : dSum < 2 ^ i := lt_of_lt_of_le
+        (sum_cond_pow_fin_lt (dataBits N) data) (Nat.pow_le_pow_right (by omega) (by omega))
+      rw [Nat.testBit_lt_two_pow ‹y < 2 ^ i›, Nat.testBit_lt_two_pow ‹dSum < 2 ^ i›]
+  · intro h
+    subst h
+    intro i
+    have hi : i.val < dataBits N := by omega
+    rw [testBit_sum_cond_pow_fin (dataBits N) data i.val hi]
+    exact Eq.mpr (by congr 1) rfl
 
 private theorem wireValue_colOutput (N : Nat) [NeZero N]
     (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N)
