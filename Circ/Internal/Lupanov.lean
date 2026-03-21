@@ -271,24 +271,23 @@ private theorem n_le_pow (N : Nat) : N ≤ 2 ^ N := by
 
 theorem lupanov_arithmetic (N : Nat) (hN : 16 ≤ N) :
     (4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N +
-      2 ^ (2 ^ addrBits N + addrBits N) + 1) * N ≤ 20 * 2 ^ N := by
+      2 ^ (2 ^ addrBits N + addrBits N)) * N ≤ 18 * 2 ^ N := by
   have h1 := term1 N hN
   have h2 := term2 N hN
   have h3 := term3 N hN
-  have h4 := n_le_pow N
   nlinarith
 
 theorem lupanov_size_le (N : Nat) (hN : 16 ≤ N) (G : Nat)
-    (hG : G ≤ 4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N +
+    (hG : G + 1 ≤ 4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N +
             2 ^ (2 ^ addrBits N + addrBits N)) :
-    G + 1 ≤ 20 * 2 ^ N / N := by
+    G + 1 ≤ 18 * 2 ^ N / N := by
   have hNpos : 0 < N := by omega
   apply (Nat.le_div_iff_mul_le hNpos).mpr
   calc (G + 1) * N
       ≤ (4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N +
-          2 ^ (2 ^ addrBits N + addrBits N) + 1) * N := by
-        apply Nat.mul_le_mul_right; omega
-    _ ≤ 20 * 2 ^ N := lupanov_arithmetic N hN
+          2 ^ (2 ^ addrBits N + addrBits N)) * N := by
+        apply Nat.mul_le_mul_right; exact hG
+    _ ≤ 18 * 2 ^ N := lupanov_arithmetic N hN
 
 -- ════════════════════════════════════════════════════════════════
 -- Section 4: Circuit Construction
@@ -1623,7 +1622,7 @@ private theorem lupanovCircuit_correct (N : Nat) [NeZero N]
   exact lupanov_lastWire_correct N f hN x
 
 private theorem szSections_le_bound (N : Nat) (hN : 16 ≤ N) :
-    szSections (addrBits N) (dataBits N) ≤
+    szSections (addrBits N) (dataBits N) + 1 ≤
       4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N + 2 ^ (2 ^ addrBits N + addrBits N) := by
   unfold szSections
   have hq1 : 1 ≤ 2 ^ dataBits N := Nat.one_le_two_pow
@@ -1641,7 +1640,7 @@ theorem lupanov_assembly (N : Nat) [NeZero N] (hN : 16 ≤ N)
     (f : BitString N → Bool) :
     ∃ G, ∃ c : Circuit Basis.andOr2 N 1 G,
       (fun x => (c.eval x) 0) = f ∧
-      G ≤ 4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N +
+      G + 1 ≤ 4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N +
           2 ^ (2 ^ addrBits N + addrBits N) := by
   exact ⟨szSections (addrBits N) (dataBits N),
     lupanovCircuit N f hN,
@@ -1653,11 +1652,11 @@ theorem lupanov_assembly (N : Nat) [NeZero N] (hN : 16 ≤ N)
 -- ════════════════════════════════════════════════════════════════
 
 /-- **Lupanov circuit construction**: For `N ≥ 16`, every Boolean function
-    has a fan-in-2 AND/OR circuit of size `≤ 20 · 2^N / N`. -/
+    has a fan-in-2 AND/OR circuit of size `≤ 18 · 2^N / N`. -/
 theorem lupanov_construction (N : Nat) [NeZero N] (hN : 16 ≤ N)
     (f : BitString N → Bool) :
     ∃ G, ∃ c : Circuit Basis.andOr2 N 1 G,
-      (fun x => (c.eval x) 0) = f ∧ c.size ≤ 20 * 2 ^ N / N := by
+      (fun x => (c.eval x) 0) = f ∧ c.size ≤ 18 * 2 ^ N / N := by
   obtain ⟨G, c, heval, hG⟩ := lupanov_assembly N hN f
   exact ⟨G, c, heval, by rw [Circuit.size]; exact lupanov_size_le N hN G hG⟩
 
