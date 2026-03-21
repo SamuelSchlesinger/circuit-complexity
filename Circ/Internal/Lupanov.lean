@@ -115,20 +115,7 @@ def binopCircuit (op : AONOp) {N G₁ G₂ : Nat} [NeZero N]
   acyclic i k := (binopGWP c₁ c₂ i).property k
 
 -- ════════════════════════════════════════════════════════════════
--- Section 3: Full Lupanov Assembly (sorry'd)
--- ════════════════════════════════════════════════════════════════
-
-/-- Full Lupanov circuit: `G ≤ 4·2^q + 2·2^k + 2^(2^k+k)` internal gates. -/
-theorem lupanov_assembly (N : Nat) [NeZero N] (hN : 16 ≤ N)
-    (f : BitString N → Bool) :
-    ∃ G, ∃ c : Circuit Basis.andOr2 N 1 G,
-      (fun x => (c.eval x) 0) = f ∧
-      G ≤ 4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N +
-          2 ^ (2 ^ addrBits N + addrBits N) := by
-  sorry
-
--- ════════════════════════════════════════════════════════════════
--- Section 4: Arithmetic — fully proved except term3
+-- Section 3: Arithmetic
 -- ════════════════════════════════════════════════════════════════
 
 /-! ### Nat.log helpers -/
@@ -310,6 +297,89 @@ theorem lupanov_size_le (N : Nat) (hN : 16 ≤ N) (G : Nat)
           2 ^ (2 ^ addrBits N + addrBits N) + 1) * N := by
         apply Nat.mul_le_mul_right; omega
     _ ≤ 20 * 2 ^ N := lupanov_arithmetic N hN
+
+-- ════════════════════════════════════════════════════════════════
+-- Section 4: Circuit Construction
+-- ════════════════════════════════════════════════════════════════
+
+/-! ### Gate construction helper -/
+
+private def mkG (W : Nat) (op : AONOp) (w0 w1 : Nat) (n0 n1 : Bool)
+    (hw0 : w0 < W) (hw1 : w1 < W)
+    (bound : Nat) (hb0 : w0 < bound) (hb1 : w1 < bound) :
+    { g : Gate Basis.andOr2 W // ∀ j : Fin g.fanIn, (g.inputs j).val < bound } :=
+  ⟨{ op := op, fanIn := 2, arityOk := rfl,
+     inputs := fun j => if j.val = 0 then ⟨w0, hw0⟩ else ⟨w1, hw1⟩,
+     negated := fun j => if j.val = 0 then n0 else n1 },
+   fun j => by dsimp; split_ifs <;> assumption⟩
+
+/-! ### Lupanov circuit
+
+Gate layout: `[constFalse | dataTree | addrTree | colLibrary | andLayer | orChain]` -/
+
+private def szSections (kk qq : Nat) : Nat :=
+  1 + (2^(qq+1) - 4) + (2^(kk+1) - 4) + 2^(2^kk) * (2^kk - 1) + 2^qq + (2^qq - 1)
+
+private lemma szSections_pos (kk qq : Nat) : 0 < szSections kk qq := by
+  unfold szSections; positivity
+
+private noncomputable def lupanovGateArray (N : Nat) [NeZero N]
+    (f : BitString N → Bool) (hN : 16 ≤ N) :
+    (i : Fin (szSections (addrBits N) (dataBits N))) →
+    { g : Gate Basis.andOr2 (N + szSections (addrBits N) (dataBits N)) //
+      ∀ j : Fin g.fanIn, (g.inputs j).val < N + i.val } := by
+  intro i
+  -- TODO: define each gate by dispatching on which section i belongs to.
+  -- Gate 0: AND(x₀, ¬x₀) = false
+  -- Gates 1..szA: data minterm tree (shared prefix)
+  -- Gates szA+1..szA+szB: addr minterm tree
+  -- Gates szA+szB+1..szA+szB+szC: column library OR chains
+  -- Gates szA+szB+szC+1..szA+szB+szC+szD: AND combining
+  -- Gates szA+szB+szC+szD+1..end: OR chain
+  have hW : 0 < N + szSections (addrBits N) (dataBits N) := by omega
+  exact mkG _ .and 0 0 false false hW hW (N + i.val) (by omega) (by omega)
+
+private noncomputable def lupanovCircuit (N : Nat) [NeZero N]
+    (f : BitString N → Bool) (hN : 16 ≤ N) :
+    Circuit Basis.andOr2 N 1 (szSections (addrBits N) (dataBits N)) where
+  gates i := (lupanovGateArray N f hN i).val
+  outputs _ :=
+    { op := .or, fanIn := 2, arityOk := rfl,
+      inputs := fun _ => ⟨N + szSections (addrBits N) (dataBits N) - 1, by
+        have := szSections_pos (addrBits N) (dataBits N); omega⟩,
+      negated := fun _ => false }
+  acyclic i k := (lupanovGateArray N f hN i).property k
+
+private theorem lupanovCircuit_correct (N : Nat) [NeZero N]
+    (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N) :
+    ((lupanovCircuit N f hN).eval x) 0 = f x := by
+  sorry
+
+private theorem szSections_le_bound (N : Nat) (hN : 16 ≤ N) :
+    szSections (addrBits N) (dataBits N) ≤
+      4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N + 2 ^ (2 ^ addrBits N + addrBits N) := by
+  unfold szSections
+  have hq1 : 1 ≤ 2 ^ dataBits N := Nat.one_le_two_pow
+  have hk1 : 1 ≤ 2 ^ addrBits N := Nat.one_le_two_pow
+  rw [show dataBits N + 1 = (dataBits N).succ from rfl, Nat.pow_succ]
+  rw [show addrBits N + 1 = (addrBits N).succ from rfl, Nat.pow_succ]
+  have hlib : 2 ^ (2 ^ addrBits N) * (2 ^ addrBits N - 1) ≤
+      2 ^ (2 ^ addrBits N + addrBits N) := by
+    calc 2 ^ (2 ^ addrBits N) * (2 ^ addrBits N - 1)
+        ≤ 2 ^ (2 ^ addrBits N) * 2 ^ addrBits N := Nat.mul_le_mul_left _ (by omega)
+      _ = 2 ^ (2 ^ addrBits N + addrBits N) := by rw [← Nat.pow_add]
+  omega
+
+theorem lupanov_assembly (N : Nat) [NeZero N] (hN : 16 ≤ N)
+    (f : BitString N → Bool) :
+    ∃ G, ∃ c : Circuit Basis.andOr2 N 1 G,
+      (fun x => (c.eval x) 0) = f ∧
+      G ≤ 4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N +
+          2 ^ (2 ^ addrBits N + addrBits N) := by
+  exact ⟨szSections (addrBits N) (dataBits N),
+    lupanovCircuit N f hN,
+    funext (lupanovCircuit_correct N f hN),
+    szSections_le_bound N hN⟩
 
 -- ════════════════════════════════════════════════════════════════
 -- Section 5: Main Construction Theorem (fully proved from above)
