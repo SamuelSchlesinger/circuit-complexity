@@ -1092,6 +1092,7 @@ private theorem wireValue_dataLeaf (N : Nat) [NeZero N]
     rw [testBit_sum_cond_pow_fin (dataBits N) data i.val hi]
     exact Eq.mpr (by congr 1) rfl
 
+set_option maxHeartbeats 12800000 in
 private theorem wireValue_colOutput (N : Nat) [NeZero N]
     (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N)
     (y : Nat) (hy : y < 2 ^ dataBits N)
@@ -1329,8 +1330,69 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
       · rw [constFalse_wire (by linarith [hsel_bound pos hpos])]
         simp [htb]
     induction r with
-    | zero => sorry
-    | succ r' ih => sorry
+    | zero =>
+      have h_ne0 : oD k q + p * (2 ^ k - 1) ≠ 0 := by positivity
+      have h_ge_oC : ¬(oD k q + p * (2 ^ k - 1) < oC q) := by
+        show ¬(oD (addrBits N) (dataBits N) + colPatIdx N f (addrBits N) (dataBits N) (lupKQ N hN)
+          ⟨y, hy⟩ * (2 ^ (addrBits N) - 1) < oC (dataBits N))
+        unfold oD oC; omega
+      have h_ge_oD : ¬(oD k q + p * (2 ^ k - 1) < oD k q) := by omega
+      have h_lt_oE : oD k q + p * (2 ^ k - 1) < oE k q := by linarith [hoE_lt]
+      rw [Circuit.wireValue_ge _ _ _ (by omega)]
+      change (lupanovGateArray N f hN ⟨_, _⟩).val.eval _ = _
+      unfold lupanovGateArray
+      simp only [show N + oD k q + p * (2 ^ k - 1) + 0 - N =
+        oD k q + p * (2 ^ k - 1) from by omega]
+      rw [dif_neg h_ne0, dif_neg h_ge_oC, dif_neg h_ge_oD, dif_pos h_lt_oE]
+      simp_rw [show (oD k q + p * (2 ^ k - 1) - oD k q) = p * (2 ^ k - 1) from by omega]
+      simp only [show p * (2 ^ k - 1) / (2 ^ k - 1) = p from Nat.mul_div_cancel p hblk,
+        show p * (2 ^ k - 1) % (2 ^ k - 1) = 0 from Nat.mul_mod_right p (2 ^ k - 1)]
+      simp only [mkG, Gate.eval, Basis.andOr2, AONOp.eval,
+        Fin.foldl_succ_last, Fin.foldl_zero, Bool.false_or]
+      simp only [Fin.val_last, Fin.val_castSucc, ite_true, ite_false,
+        show ¬((1 : Nat) = 0) from by omega, Bool.false_xor,
+        show (0 : Nat) + 1 = 1 from by omega]
+      rw [selWire 0 (by omega), selWire 1 (by omega)]
+      simp [List.range, List.foldl, Bool.false_or]
+    | succ r' ih =>
+      have h_ne0' : oD k q + p * (2 ^ k - 1) + (r' + 1) ≠ 0 := by positivity
+      have h_ge_oC' : ¬(oD k q + p * (2 ^ k - 1) + (r' + 1) < oC q) := by
+        show ¬(oD (addrBits N) (dataBits N) + colPatIdx N f (addrBits N) (dataBits N) (lupKQ N hN)
+          ⟨y, hy⟩ * (2 ^ (addrBits N) - 1) + (r' + 1) < oC (dataBits N))
+        unfold oD oC; omega
+      have h_ge_oD' : ¬(oD k q + p * (2 ^ k - 1) + (r' + 1) < oD k q) := by omega
+      have h_lt_oE' : oD k q + p * (2 ^ k - 1) + (r' + 1) < oE k q := by linarith [hoE_lt]
+      rw [Circuit.wireValue_ge _ _ _ (by
+        show ¬(N + oD k q + p * (2 ^ k - 1) + (r' + 1) < N); omega)]
+      change (lupanovGateArray N f hN ⟨_, _⟩).val.eval _ = _
+      unfold lupanovGateArray
+      simp only [show N + oD k q + p * (2 ^ k - 1) + (r' + 1) - N =
+        oD k q + p * (2 ^ k - 1) + (r' + 1) from by omega]
+      rw [dif_neg h_ne0', dif_neg h_ge_oC', dif_neg h_ge_oD', dif_pos h_lt_oE']
+      simp_rw [show (oD k q + p * (2 ^ k - 1) + (r' + 1) - oD k q) =
+        p * (2 ^ k - 1) + (r' + 1) from by omega]
+      simp only [show (p * (2 ^ k - 1) + (r' + 1)) / (2 ^ k - 1) = p from
+        Nat.div_eq_of_lt_le (by omega) (by omega),
+        show (p * (2 ^ k - 1) + (r' + 1)) % (2 ^ k - 1) = r' + 1 from
+        Nat.mod_eq_of_lt (by omega)]
+      simp only [show r' + 1 ≠ 0 from by omega, ite_false,
+        show r' + 1 - 1 = r' from by omega]
+      simp only [mkG, Gate.eval, Basis.andOr2, AONOp.eval,
+        Fin.foldl_succ_last, Fin.foldl_zero, Bool.false_or]
+      simp only [Fin.val_last, Fin.val_castSucc, ite_true, ite_false,
+        show ¬((1 : Nat) = 0) from by omega, Bool.false_xor,
+        show r' + 1 + 1 = r' + 2 from by omega]
+      show ((lupanovCircuit N f hN).wireValue x
+        ⟨N + oD k q + p * (2 ^ k - 1) + r', by omega⟩ ||
+        (if Nat.testBit p (r' + 2) then
+          (lupanovCircuit N f hN).wireValue x
+            ⟨N + oC q + (2 ^ k - 4) + (r' + 2), hsel_bound (r' + 2) (by omega)⟩
+         else
+          (lupanovCircuit N f hN).wireValue x ⟨N, by linarith [hsel_bound (r' + 2) (by omega)]⟩)) =
+        _
+      rw [ih (by omega) (by omega), selWire (r' + 2) (by omega)]
+      rw [show r' + 2 + 1 = (r' + 1) + 2 from by omega,
+        List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil]
   change (lupanovCircuit N f hN).wireValue x
     ⟨N + oD k q + p * (2 ^ k - 1) + (2 ^ k - 2), by omega⟩ = _
   rw [colChain (2 ^ k - 2) (by omega) (by omega)]
