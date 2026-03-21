@@ -910,28 +910,58 @@ private theorem wireValue_orChain_sem (N : Nat) [NeZero N]
     (List.range (r + 2)).foldl
       (fun acc y => acc || if h : y < 2 ^ dataBits N
         then andLayerSem N f hN x y h else false) false := by
-  set_option maxHeartbeats 1600000 in
-  have hge : ¬((⟨N + oF (addrBits N) (dataBits N) + r, hW⟩ : Fin _).val < N) := by
-    show ¬(N + oF (addrBits N) (dataBits N) + r < N); omega
-  rw [Circuit.wireValue_ge _ _ _ hge]
-  simp only [lupanovCircuit]
-  unfold lupanovGateArray
-  simp only [show N + oF (addrBits N) (dataBits N) + r - N =
-    oF (addrBits N) (dataBits N) + r from by omega]
-  have hk3 := addrBits_ge_three N hN
+  have andLayer_sem : ∀ (y : Nat) (hy : y < 2 ^ dataBits N)
+      (hyW : N + oE (addrBits N) (dataBits N) + y <
+            N + szSections (addrBits N) (dataBits N)),
+      (lupanovCircuit N f hN).wireValue x
+        ⟨N + oE (addrBits N) (dataBits N) + y, hyW⟩ =
+      andLayerSem N f hN x y hy := by sorry
+  have hoEF : oE (addrBits N) (dataBits N) + 2 ^ dataBits N =
+      oF (addrBits N) (dataBits N) := by unfold oF; ring
+  have hoFsz : oF (addrBits N) (dataBits N) + (2 ^ dataBits N - 1) =
+      szSections (addrBits N) (dataBits N) := by unfold szSections oF oE oD oC; omega
   have hq2 := dataBits_ge_two N hN
   have h4q := pow_ge_4 (dataBits N) hq2
-  rw [dif_neg (show ¬(oF (addrBits N) (dataBits N) + r = 0) from by
-    unfold oF oE oD oC; omega)]
-  rw [dif_neg (show ¬(oF (addrBits N) (dataBits N) + r < oC (dataBits N)) from by
-    unfold oF oE oD oC; omega)]
-  rw [dif_neg (show ¬(oF (addrBits N) (dataBits N) + r < oD (addrBits N) (dataBits N)) from by
-    unfold oF oE oD; omega)]
-  rw [dif_neg (show ¬(oF (addrBits N) (dataBits N) + r < oE (addrBits N) (dataBits N)) from by
-    unfold oF oE; omega)]
-  rw [dif_neg (show ¬(oF (addrBits N) (dataBits N) + r < oF (addrBits N) (dataBits N)) from by
-    omega)]
-  sorry
+  induction r with
+  | zero =>
+    set_option maxHeartbeats 3200000 in
+    rw [Circuit.wireValue_ge _ _ _ (show ¬((⟨N + oF (addrBits N) (dataBits N) + 0, hW⟩ :
+        Fin _).val < N) from by show ¬(N + oF (addrBits N) (dataBits N) + 0 < N); omega)]
+    simp only [lupanovCircuit]; unfold lupanovGateArray
+    simp only [show N + oF (addrBits N) (dataBits N) + 0 - N =
+      oF (addrBits N) (dataBits N) + 0 from by omega]
+    rw [dif_neg (by unfold oF oE oD oC; omega : ¬(oF (addrBits N) (dataBits N) + 0 = 0))]
+    rw [dif_neg (by unfold oF oE oD oC; omega :
+      ¬(oF (addrBits N) (dataBits N) + 0 < oC (dataBits N)))]
+    rw [dif_neg (by unfold oF oE oD; omega :
+      ¬(oF (addrBits N) (dataBits N) + 0 < oD (addrBits N) (dataBits N)))]
+    rw [dif_neg (by unfold oF oE; omega :
+      ¬(oF (addrBits N) (dataBits N) + 0 < oE (addrBits N) (dataBits N)))]
+    rw [dif_neg (by omega :
+      ¬(oF (addrBits N) (dataBits N) + 0 < oF (addrBits N) (dataBits N)))]
+    simp only [mkG, Gate.eval, Basis.andOr2, AONOp.eval,
+      Fin.foldl_succ_last, Fin.foldl_zero, Bool.false_or, ite_self, Bool.false_xor]
+    sorry
+  | succ r' ih =>
+    set_option maxHeartbeats 3200000 in
+    rw [Circuit.wireValue_ge _ _ _ (show ¬((⟨N + oF (addrBits N) (dataBits N) + (r' + 1), hW⟩ :
+        Fin _).val < N) from by show ¬(N + oF (addrBits N) (dataBits N) + (r' + 1) < N); omega)]
+    simp only [lupanovCircuit]; unfold lupanovGateArray
+    simp only [show N + oF (addrBits N) (dataBits N) + (r' + 1) - N =
+      oF (addrBits N) (dataBits N) + (r' + 1) from by omega]
+    rw [dif_neg (by unfold oF oE oD oC; omega :
+      ¬(oF (addrBits N) (dataBits N) + (r' + 1) = 0))]
+    rw [dif_neg (by unfold oF oE oD oC; omega :
+      ¬(oF (addrBits N) (dataBits N) + (r' + 1) < oC (dataBits N)))]
+    rw [dif_neg (by unfold oF oE oD; omega :
+      ¬(oF (addrBits N) (dataBits N) + (r' + 1) < oD (addrBits N) (dataBits N)))]
+    rw [dif_neg (by unfold oF oE; omega :
+      ¬(oF (addrBits N) (dataBits N) + (r' + 1) < oE (addrBits N) (dataBits N)))]
+    rw [dif_neg (by omega :
+      ¬(oF (addrBits N) (dataBits N) + (r' + 1) < oF (addrBits N) (dataBits N)))]
+    simp only [mkG, Gate.eval, Basis.andOr2, AONOp.eval,
+      Fin.foldl_succ_last, Fin.foldl_zero, Bool.false_or, ite_self, Bool.false_xor]
+    sorry
 
 private theorem lastOrChain_eq_f (N : Nat) [NeZero N]
     (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N)
