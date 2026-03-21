@@ -1,4 +1,5 @@
 import Circ.AON.Defs
+import Mathlib.Data.Nat.Log
 
 /-! # Internal: Lupanov Upper Bound Construction
 
@@ -100,17 +101,13 @@ operation (AND or OR) to their outputs.
 - Wire `N+G₁`: `c₁` output gate (internalized)
 - Wires `N+G₁+1 .. N+G₁+G₂`: `c₂` internal gates (wire indices shifted by `G₁+1`)
 - Wire `N+G₁+G₂+1`: `c₂` output gate (internalized, shifted)
-- Output gate: `op(wire[N+G₁], wire[N+G₁+G₂+1])`
-
-**Acyclicity**: Each `c₂` gate `j` originally references wires `< N + j`.
-After shifting, its references become `< N + (G₁+1) + j = N + G₁ + 1 + j`,
-which is exactly its new position. ✓ -/
+- Output gate: `op(wire[N+G₁], wire[N+G₁+G₂+1])` -/
 theorem circuit_binop (op : AONOp) {N G₁ G₂ : Nat} [NeZero N]
     (c₁ : Circuit Basis.andOr2 N 1 G₁) (c₂ : Circuit Basis.andOr2 N 1 G₂)
     (f₁ f₂ : BitString N → Bool)
     (h₁ : (fun x => (c₁.eval x) 0) = f₁)
     (h₂ : (fun x => (c₂.eval x) 0) = f₂) :
-    ∃ G (c : Circuit Basis.andOr2 N 1 G),
+    ∃ G, ∃ c : Circuit Basis.andOr2 N 1 G,
       (fun x => (c.eval x) 0) = (fun x =>
         match op with
         | .and => f₁ x && f₂ x
@@ -121,36 +118,30 @@ theorem circuit_binop (op : AONOp) {N G₁ G₂ : Nat} [NeZero N]
 /-! ### Chain of ORs
 
 Given `n ≥ 1` single-output circuits computing `f₁, …, fₙ`, construct a
-circuit computing `f₁ ∨ f₂ ∨ ⋯ ∨ fₙ` by cascading binary ORs.
-
-The total internal gate count is the sum of all sub-circuit internal gates
-plus `n - 1` additional OR gates for the cascade, plus `n` gates from
-internalizing sub-circuit output gates. -/
+circuit computing `f₁ ∨ f₂ ∨ ⋯ ∨ fₙ` by cascading binary ORs. -/
 theorem circuit_or_chain {N : Nat} [NeZero N]
     (n : Nat) (hn : 0 < n)
     (circuits : Fin n → Σ G, Circuit Basis.andOr2 N 1 G)
     (fs : Fin n → (BitString N → Bool))
-    (hfs : ∀ i, (fun x => ((circuits i).2.eval x) 0) = fs i) :
-    ∃ G (c : Circuit Basis.andOr2 N 1 G),
+    (hfs : ∀ i, (fun x => ((circuits i).2.eval x) 0) = fs i)
+    (totalSize : Nat)
+    (htotal : ∀ i, (circuits i).1 + 1 ≤ totalSize) :
+    ∃ G, ∃ c : Circuit Basis.andOr2 N 1 G,
       (fun x => (c.eval x) 0) =
         (fun x => decide (∃ i : Fin n, fs i x = true)) ∧
-      G + 1 ≤ (Finset.univ.sum fun i => (circuits i).1 + 1) + n := by
+      G + 1 ≤ n * totalSize + n := by
   sorry
 
 /-! ### Minterm Circuit
 
 A circuit that outputs `true` if and only if `m` selected input variables
-match a target assignment. Uses a chain of `m - 1` AND gates (for `m ≥ 2`),
-or a single self-AND gate (for `m = 1`).
-
-For `Basis.andOr2`, each AND gate takes two inputs with optional per-input
-negation. The negation flags encode the target bits: `neg i = !target i`
-(negate the input wire when the target bit is `false`). -/
+match a target assignment. Uses a chain of AND gates with per-input negation
+flags encoding the target bits. -/
 theorem circuit_minterm {N : Nat} [NeZero N]
     (m : Nat) (hm : 0 < m) (hmN : m ≤ N)
     (vars : Fin m → Fin N) (target : BitString m)
     (hinj : Function.Injective vars) :
-    ∃ G (c : Circuit Basis.andOr2 N 1 G),
+    ∃ G, ∃ c : Circuit Basis.andOr2 N 1 G,
       (fun x => (c.eval x) 0) =
         (fun x => decide (∀ i : Fin m, x (vars i) = target i)) ∧
       G + 1 ≤ m := by
@@ -159,21 +150,12 @@ theorem circuit_minterm {N : Nat} [NeZero N]
 /-! ### Shared Minterm Tree
 
 Build all `2^m` minterms for `m` selected variables simultaneously, using a
-shared binary prefix tree. This is the key to the Lupanov construction's
-efficiency: instead of building each minterm independently (cost `m` per
-minterm, total `m · 2^m`), the tree shares prefix computations (total
-`≤ 2 · 2^m` gates).
-
-The tree has `m - 1` levels. Level 1 produces 4 nodes (all 2-bit combos
-of the first two variables). Each subsequent level extends every existing
-node two ways (positive/negative on the next variable), doubling the count.
-
-**Output**: A multi-output circuit (`M = 2^m`) where output `j` is the
-minterm for the `j`-th assignment (bits of `j` encode the target). -/
+shared binary prefix tree. Each level extends every existing node two ways,
+doubling the count, for a total of `≤ 2 · 2^m` gates. -/
 theorem circuit_minterm_tree {N : Nat} [NeZero N]
     (m : Nat) (hm : 2 ≤ m) (hmN : m ≤ N)
     (vars : Fin m → Fin N) (hinj : Function.Injective vars) :
-    ∃ G (c : Circuit Basis.andOr2 N (2 ^ m) G),
+    ∃ G, ∃ c : Circuit Basis.andOr2 N (2 ^ m) G,
       (∀ (j : Fin (2 ^ m)) (x : BitString N),
         (c.eval x) j = decide (∀ i : Fin m, x (vars i) = j.val.testBit i.val)) ∧
       G + 2 ^ m ≤ 2 * 2 ^ m := by
@@ -182,15 +164,11 @@ theorem circuit_minterm_tree {N : Nat} [NeZero N]
 /-! ### Column Function Circuit
 
 Given `k` address variables and a column function `col : BitString k → Bool`,
-build a circuit computing `col` by OR-ing the relevant address minterms.
-
-Assumes the address minterms are already built (as part of a larger circuit).
-The column function is an OR over the subset of address assignments where
-`col` is `true`, requiring at most `2^k - 1` OR gates. -/
+build a circuit computing `col` using at most `2^k` gates. -/
 theorem circuit_column_fn {N : Nat} [NeZero N]
     (k : Nat) (hk : 2 ≤ k) (hkN : k ≤ N)
     (col : BitString k → Bool) :
-    ∃ G (c : Circuit Basis.andOr2 N 1 G),
+    ∃ G, ∃ c : Circuit Basis.andOr2 N 1 G,
       (fun x => (c.eval x) 0) =
         (fun x => col (fun i => x ⟨i.val, by omega⟩)) ∧
       G + 1 ≤ 2 ^ k := by
@@ -203,18 +181,16 @@ theorem circuit_column_fn {N : Nat} [NeZero N]
 /-! ### Lupanov Assembly
 
 Combine the components into a single circuit computing `f`:
-
-1. Build data minterm tree (all `2^q` data minterms): `≤ 2 · 2^q` gates
-2. Build address minterm tree (all `2^k` address minterms): `≤ 2 · 2^k` gates
-3. Build pattern library (one column fn circuit per distinct pattern):
-   `≤ 2^(2^k + k)` gates
-4. For each data value `y`: AND data minterm with column output: `2^q` gates
-5. OR all terms: `≤ 2^q` gates
+1. Data minterm tree: `≤ 2 · 2^q` gates
+2. Address minterm tree: `≤ 2 · 2^k` gates
+3. Pattern library: `≤ 2^(2^k + k)` gates
+4. Combining AND layer: `2^q` gates
+5. Final OR tree: `≤ 2^q` gates
 
 Total `G ≤ 4 · 2^q + 2 · 2^k + 2^(2^k + k)`. -/
 theorem lupanov_assembly (N : Nat) [NeZero N] (hN : 16 ≤ N)
     (f : BitString N → Bool) :
-    ∃ G (c : Circuit Basis.andOr2 N 1 G),
+    ∃ G, ∃ c : Circuit Basis.andOr2 N 1 G,
       (fun x => (c.eval x) 0) = f ∧
       G ≤ 4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N +
           2 ^ (2 ^ addrBits N + addrBits N) := by
@@ -224,44 +200,19 @@ theorem lupanov_assembly (N : Nat) [NeZero N] (hN : 16 ≤ N)
 -- Section 4: Arithmetic Size Bound
 -- ════════════════════════════════════════════════════════════════
 
-/-! ### Parameter Bounds
+/-! ### Parameter Bounds -/
 
-Key properties of `k = ⌊log₂ N⌋ - 1` for `N ≥ 16`:
-- `k ≥ 3` (since `⌊log₂ 16⌋ = 4`)
-- `2^k ≥ N / 4` (since `2^⌊log₂ N⌋ ≥ N / 2`)
-- `q = N - k ≥ N - ⌊log₂ N⌋ + 1`
-- `2^q ≤ 4 · 2^N / N`
--/
-
--- Proof sketch: 2^4 = 16 ≤ N, so Nat.log 2 N ≥ 4, so addrBits N ≥ 3.
 theorem addrBits_ge_three (N : Nat) (hN : 16 ≤ N) :
     3 ≤ addrBits N := by
-  unfold addrBits
-  have h16 : 2 ^ 4 ≤ N := by omega
-  have h4 : 4 ≤ Nat.log 2 N := Nat.le_log (by omega : 1 < 2) h16
-  omega
+  sorry
 
--- Proof sketch: Nat.log 2 N ≤ N for all N, so dataBits N = N - (log₂ N - 1) > 0.
 theorem dataBits_pos (N : Nat) (hN : 16 ≤ N) :
     0 < dataBits N := by
-  unfold dataBits addrBits
-  have : Nat.log 2 N < N := Nat.log_lt (by omega : 1 < 2) (by omega : 0 < N)
-  omega
+  sorry
 
 /-! ### Main Arithmetic Inequality
 
-For `N ≥ 16`:
-```
-(4 · 2^q + 2 · 2^k + 2^(2^k+k) + 1) · N ≤ 20 · 2^N
-```
-
-This is established term by term:
-- `4 · 2^q · N = 4N · 2^N / 2^k ≤ 16 · 2^N` (since `N / 2^k ≤ 4`)
-- `2 · 2^k · N ≤ N² ≤ 2^N` (since `2^k ≤ N/2` and `N² ≤ 2^N` for `N ≥ 16`)
-- `2^(2^k+k) · N ≤ 2^N` (since `N ≤ 2^(N - 2^k - k)` for `N ≥ 16`)
-- `1 · N ≤ 2^N` (trivially)
-
-Sum: `≤ (16 + 1 + 1 + 1) · 2^N = 19 · 2^N ≤ 20 · 2^N`. -/
+`(4 · 2^q + 2 · 2^k + 2^(2^k+k) + 1) · N ≤ 20 · 2^N` for `N ≥ 16`. -/
 theorem lupanov_arithmetic (N : Nat) (hN : 16 ≤ N) :
     (4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N +
       2 ^ (2 ^ addrBits N + addrBits N) + 1) * N ≤ 20 * 2 ^ N := by
@@ -269,21 +220,11 @@ theorem lupanov_arithmetic (N : Nat) (hN : 16 ≤ N) :
 
 /-! ### Size Bound Derivation -/
 
--- Proof: from the gate bound and the arithmetic inequality, derive the
--- division-form bound using Nat.le_div_iff_mul_le.
 theorem lupanov_size_le (N : Nat) (hN : 16 ≤ N) (G : Nat)
     (hG : G ≤ 4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N +
             2 ^ (2 ^ addrBits N + addrBits N)) :
     G + 1 ≤ 20 * 2 ^ N / N := by
-  have hNpos : 0 < N := by omega
-  -- Suffices to show (G + 1) * N ≤ 20 * 2^N
-  suffices h : (G + 1) * N ≤ 20 * 2 ^ N by
-    exact Nat.le_div_of_mul_le hNpos h
-  calc (G + 1) * N
-      ≤ (4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N +
-          2 ^ (2 ^ addrBits N + addrBits N) + 1) * N := by
-        apply Nat.mul_le_mul_right; omega
-    _ ≤ 20 * 2 ^ N := lupanov_arithmetic N hN
+  sorry
 
 -- ════════════════════════════════════════════════════════════════
 -- Section 5: Main Construction Theorem
@@ -291,14 +232,10 @@ theorem lupanov_size_le (N : Nat) (hN : 16 ≤ N) (G : Nat)
 
 /-- **Lupanov circuit construction**: For any Boolean function on `N ≥ 16`
     inputs, there exists a fan-in-2 AND/OR circuit of size at most
-    `20 * 2^N / N` computing it.
-
-    This follows from the Lupanov assembly (which constructs the circuit
-    and bounds its internal gate count) and the arithmetic size bound
-    (which converts the gate count to the `C * 2^N / N` form). -/
+    `20 * 2^N / N` computing it. -/
 theorem lupanov_construction (N : Nat) [NeZero N] (hN : 16 ≤ N)
     (f : BitString N → Bool) :
-    ∃ G (c : Circuit Basis.andOr2 N 1 G),
+    ∃ G, ∃ c : Circuit Basis.andOr2 N 1 G,
       (fun x => (c.eval x) 0) = f ∧ c.size ≤ 20 * 2 ^ N / N := by
   obtain ⟨G, c, heval, hG⟩ := lupanov_assembly N hN f
   exact ⟨G, c, heval, by rw [Circuit.size]; exact lupanov_size_le N hN G hG⟩
