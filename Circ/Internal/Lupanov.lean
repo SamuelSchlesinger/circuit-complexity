@@ -915,7 +915,28 @@ private theorem wireValue_orChain_sem (N : Nat) [NeZero N]
             N + szSections (addrBits N) (dataBits N)),
       (lupanovCircuit N f hN).wireValue x
         ⟨N + oE (addrBits N) (dataBits N) + y, hyW⟩ =
-      andLayerSem N f hN x y hy := by sorry
+      andLayerSem N f hN x y hy := by
+    intro y hy hyW
+    set_option maxHeartbeats 3200000 in
+    rw [Circuit.wireValue_ge _ _ _ (by
+      show ¬(N + oE (addrBits N) (dataBits N) + y < N); omega)]
+    change (lupanovGateArray N f hN ⟨_, _⟩).val.eval _ = _
+    unfold lupanovGateArray
+    simp only [show N + oE (addrBits N) (dataBits N) + y - N =
+      oE (addrBits N) (dataBits N) + y from by omega]
+    rw [dif_neg (by unfold oE oD oC; have := pow_ge_4 (dataBits N) (dataBits_ge_two N hN); omega :
+      ¬(oE (addrBits N) (dataBits N) + y = 0))]
+    rw [dif_neg (by unfold oE oD oC; omega :
+      ¬(oE (addrBits N) (dataBits N) + y < oC (dataBits N)))]
+    rw [dif_neg (by unfold oE oD; omega :
+      ¬(oE (addrBits N) (dataBits N) + y < oD (addrBits N) (dataBits N)))]
+    rw [dif_neg (by unfold oE; omega :
+      ¬(oE (addrBits N) (dataBits N) + y < oE (addrBits N) (dataBits N)))]
+    rw [dif_pos (by unfold oF; omega :
+      oE (addrBits N) (dataBits N) + y < oF (addrBits N) (dataBits N))]
+    simp only [mkG, Gate.eval, Basis.andOr2, AONOp.eval,
+      Fin.foldl_succ_last, Fin.foldl_zero, Bool.false_and, Bool.true_and, ite_self, Bool.false_xor]
+    sorry
   have hoEF : oE (addrBits N) (dataBits N) + 2 ^ dataBits N =
       oF (addrBits N) (dataBits N) := by unfold oF; ring
   have hoFsz : oF (addrBits N) (dataBits N) + (2 ^ dataBits N - 1) =
