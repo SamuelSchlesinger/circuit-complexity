@@ -32,67 +32,63 @@ def addrBits (N : Nat) : Nat := Nat.log 2 N - 1
 def dataBits (N : Nat) : Nat := N - addrBits N
 
 -- ════════════════════════════════════════════════════════════════
--- Section 2: Circuit Construction Sub-Lemmas (sorry'd)
+-- Section 2: Gate Construction Helpers
 -- ════════════════════════════════════════════════════════════════
 
-/-- Compose two single-output circuits with AND or OR. -/
-theorem circuit_binop (op : AONOp) {N G₁ G₂ : Nat} [NeZero N]
-    (c₁ : Circuit Basis.andOr2 N 1 G₁) (c₂ : Circuit Basis.andOr2 N 1 G₂)
-    (f₁ f₂ : BitString N → Bool)
-    (h₁ : (fun x => (c₁.eval x) 0) = f₁)
-    (h₂ : (fun x => (c₂.eval x) 0) = f₂) :
-    ∃ G, ∃ c : Circuit Basis.andOr2 N 1 G,
-      (fun x => (c.eval x) 0) = (fun x =>
-        match op with
-        | .and => f₁ x && f₂ x
-        | .or => f₁ x || f₂ x) ∧
-      G + 1 = (G₁ + 1) + (G₂ + 1) + 1 := by
-  sorry
+/-- Build a fan-in-2 gate from two wire references and negation flags. -/
+private def mkGate2 (op : AONOp) {W : Nat}
+    (w₀ w₁ : Fin W) (n₀ n₁ : Bool) : Gate Basis.andOr2 W where
+  op := op; fanIn := 2; arityOk := rfl
+  inputs i := if i.val = 0 then w₀ else w₁
+  negated i := if i.val = 0 then n₀ else n₁
 
-/-- Cascade `n` circuits with OR. -/
-theorem circuit_or_chain {N : Nat} [NeZero N]
-    (n : Nat) (hn : 0 < n)
-    (circuits : Fin n → Σ G, Circuit Basis.andOr2 N 1 G)
-    (fs : Fin n → (BitString N → Bool))
-    (hfs : ∀ i, (fun x => ((circuits i).2.eval x) 0) = fs i)
-    (totalSize : Nat)
-    (htotal : ∀ i, (circuits i).1 + 1 ≤ totalSize) :
-    ∃ G, ∃ c : Circuit Basis.andOr2 N 1 G,
-      (fun x => (c.eval x) 0) =
-        (fun x => decide (∃ i : Fin n, fs i x = true)) ∧
-      G + 1 ≤ n * totalSize + n := by
-  sorry
+/-- Remap a wire from c₂'s space into the combined space: primary inputs
+    stay, internal wires shift by `G₁ + 1`. -/
+private def remap₂ (N G₁ G₂ : Nat) (w : Fin (N + G₂)) : Fin (N + (G₁ + G₂ + 2)) :=
+  if h : w.val < N then ⟨w.val, by omega⟩
+  else ⟨w.val + G₁ + 1, by have := w.isLt; omega⟩
 
-/-- Single minterm detector (chain of ANDs). -/
-theorem circuit_minterm {N : Nat} [NeZero N]
-    (m : Nat) (hm : 0 < m) (hmN : m ≤ N)
-    (vars : Fin m → Fin N) (target : BitString m)
-    (hinj : Function.Injective vars) :
-    ∃ G, ∃ c : Circuit Basis.andOr2 N 1 G,
-      (fun x => (c.eval x) 0) =
-        (fun x => decide (∀ i : Fin m, x (vars i) = target i)) ∧
-      G + 1 ≤ m := by
-  sorry
+private def gw₀ {W : Nat} (g : Gate Basis.andOr2 W) : Fin W :=
+  g.inputs ⟨0, by rw [andOr2_fanIn]; omega⟩
+private def gw₁ {W : Nat} (g : Gate Basis.andOr2 W) : Fin W :=
+  g.inputs ⟨1, by rw [andOr2_fanIn]; omega⟩
+private def gn₀ {W : Nat} (g : Gate Basis.andOr2 W) : Bool :=
+  g.negated ⟨0, by rw [andOr2_fanIn]; omega⟩
+private def gn₁ {W : Nat} (g : Gate Basis.andOr2 W) : Bool :=
+  g.negated ⟨1, by rw [andOr2_fanIn]; omega⟩
 
-/-- Shared minterm tree: all `2^m` minterms via shared prefix computation. -/
-theorem circuit_minterm_tree {N : Nat} [NeZero N]
-    (m : Nat) (hm : 2 ≤ m) (hmN : m ≤ N)
-    (vars : Fin m → Fin N) (hinj : Function.Injective vars) :
-    ∃ G, ∃ c : Circuit Basis.andOr2 N (2 ^ m) G,
-      (∀ (j : Fin (2 ^ m)) (x : BitString N),
-        (c.eval x) j = decide (∀ i : Fin m, x (vars i) = j.val.testBit i.val)) ∧
-      G + 2 ^ m ≤ 2 * 2 ^ m := by
-  sorry
+/-- Lift a wire from c₁'s space into the combined space (extend bound). -/
+private def lift₁ {N G₁ G₂ : Nat} (w : Fin (N + G₁)) : Fin (N + (G₁ + G₂ + 2)) :=
+  ⟨w.val, by omega⟩
 
-/-- Column function circuit (OR of address minterms). -/
-theorem circuit_column_fn {N : Nat} [NeZero N]
-    (k : Nat) (hk : 2 ≤ k) (hkN : k ≤ N)
-    (col : BitString k → Bool) :
-    ∃ G, ∃ c : Circuit Basis.andOr2 N 1 G,
-      (fun x => (c.eval x) 0) =
-        (fun x => col (fun i => x ⟨i.val, by omega⟩)) ∧
-      G + 1 ≤ 2 ^ k := by
-  sorry
+-- ════════════════════════════════════════════════════════════════
+-- Section 2b: Binary Circuit Composition
+-- ════════════════════════════════════════════════════════════════
+
+/-- Compose two circuits with a binary AND/OR. Produces `G₁ + G₂ + 2`
+    internal gates by internalizing both circuits' output gates and adding
+    a binary op gate as the new output.
+
+    Gate layout: `[c₁.gates | c₁.out | c₂.gates(remapped) | c₂.out(remapped)]`
+    Output: `op(wire[N+G₁], wire[N+G₁+G₂+1])`. -/
+def binopCircuit (op : AONOp) {N G₁ G₂ : Nat} [NeZero N]
+    (c₁ : Circuit Basis.andOr2 N 1 G₁) (c₂ : Circuit Basis.andOr2 N 1 G₂) :
+    Circuit Basis.andOr2 N 1 (G₁ + G₂ + 2) where
+  gates i :=
+    if h₁ : i.val < G₁ then
+      let g := c₁.gates ⟨i.val, h₁⟩
+      mkGate2 g.op (lift₁ (gw₀ g)) (lift₁ (gw₁ g)) (gn₀ g) (gn₁ g)
+    else if _ : i.val = G₁ then
+      let g := c₁.outputs 0
+      mkGate2 g.op (lift₁ (gw₀ g)) (lift₁ (gw₁ g)) (gn₀ g) (gn₁ g)
+    else if h₃ : i.val < G₁ + 1 + G₂ then
+      let g := c₂.gates ⟨i.val - G₁ - 1, by omega⟩
+      mkGate2 g.op (remap₂ N G₁ G₂ (gw₀ g)) (remap₂ N G₁ G₂ (gw₁ g)) (gn₀ g) (gn₁ g)
+    else
+      let g := c₂.outputs 0
+      mkGate2 g.op (remap₂ N G₁ G₂ (gw₀ g)) (remap₂ N G₁ G₂ (gw₁ g)) (gn₀ g) (gn₁ g)
+  outputs _ := mkGate2 op ⟨N + G₁, by omega⟩ ⟨N + G₁ + G₂ + 1, by omega⟩ false false
+  acyclic := by intro i k; sorry
 
 -- ════════════════════════════════════════════════════════════════
 -- Section 3: Full Lupanov Assembly (sorry'd)
