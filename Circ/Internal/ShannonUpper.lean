@@ -2,11 +2,15 @@ import Circ.AON.Defs
 import Mathlib.Data.Nat.Log
 import Mathlib.Tactic
 
-/-! # Internal: Lupanov Upper Bound Construction
+/-! # Internal: Shannon Upper Bound Construction
 
-The weak Lupanov bound: every Boolean function on `N` variables can be
-computed by a fan-in-2 AND/OR circuit of size at most `C * 2^N / N`,
+The Shannon (1949) upper bound: every Boolean function on `N` variables
+can be computed by a fan-in-2 AND/OR circuit of size at most `C * 2^N / N`,
 for a fixed constant `C` and all sufficiently large `N`.
+
+This is the full-column-library variant (C = 18). The tighter
+`(1 + o(1)) · 2^N / N` bound due to Lupanov (1958) uses column grouping
+and is not yet formalized.
 
 ## Construction
 
@@ -15,11 +19,11 @@ Split `N` inputs into `k = ⌊log₂ N⌋ - 1` address variables and
 `f(a,y) = ⋁ᵧ [mintermᵧ(data) ∧ colᵧ(addr)]` where `colᵧ(a) = f(a,y)`.
 
 Build shared minterm trees for both variable groups, a pattern library
-for column functions, AND/OR combining layers. Total ≤ `20 · 2^N / N`
+for column functions, AND/OR combining layers. Total ≤ `18 · 2^N / N`
 gates for `N ≥ 16`.
 -/
 
-namespace Lupanov
+namespace ShannonUpper
 
 -- ════════════════════════════════════════════════════════════════
 -- Section 1: Parameters
@@ -269,7 +273,7 @@ private theorem term3 (N : Nat) (hN : 16 ≤ N) :
 private theorem n_le_pow (N : Nat) : N ≤ 2 ^ N := by
   have := @Nat.lt_pow_self N 2 (by omega); omega
 
-theorem lupanov_arithmetic (N : Nat) (hN : 16 ≤ N) :
+theorem shannon_arithmetic (N : Nat) (hN : 16 ≤ N) :
     (4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N +
       2 ^ (2 ^ addrBits N + addrBits N)) * N ≤ 18 * 2 ^ N := by
   have h1 := term1 N hN
@@ -277,7 +281,7 @@ theorem lupanov_arithmetic (N : Nat) (hN : 16 ≤ N) :
   have h3 := term3 N hN
   nlinarith
 
-theorem lupanov_size_le (N : Nat) (hN : 16 ≤ N) (G : Nat)
+theorem shannon_size_le (N : Nat) (hN : 16 ≤ N) (G : Nat)
     (hG : G + 1 ≤ 4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N +
             2 ^ (2 ^ addrBits N + addrBits N)) :
     G + 1 ≤ 18 * 2 ^ N / N := by
@@ -287,7 +291,7 @@ theorem lupanov_size_le (N : Nat) (hN : 16 ≤ N) (G : Nat)
       ≤ (4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N +
           2 ^ (2 ^ addrBits N + addrBits N)) * N := by
         apply Nat.mul_le_mul_right; exact hG
-    _ ≤ 18 * 2 ^ N := lupanov_arithmetic N hN
+    _ ≤ 18 * 2 ^ N := shannon_arithmetic N hN
 
 -- ════════════════════════════════════════════════════════════════
 -- Section 4: Circuit Construction
@@ -436,9 +440,9 @@ theorem colPatIdx_lt (N : Nat) (f : BitString N → Bool)
     colPatIdx N f k q hkq y < 2^(2^k) :=
   encodeCol_lt k (colFun N f k q hkq y)
 
-/-! ### Lupanov gate array -/
+/-! ### Shannon gate array -/
 
-private noncomputable def lupanovGateArray (N : Nat) [NeZero N]
+private noncomputable def shannonGateArray (N : Nat) [NeZero N]
     (f : BitString N → Bool) (hN : 16 ≤ N) :
     (i : Fin (szSections (addrBits N) (dataBits N))) →
     { g : Gate Basis.andOr2 (N + szSections (addrBits N) (dataBits N)) //
@@ -660,16 +664,16 @@ private noncomputable def lupanovGateArray (N : Nat) [NeZero N]
       unfold oF at hiF; omega
     exact mkG W .or w0 w1 false false hw0_lt hw1_lt (N + i.val) hb0 hb1
 
-private noncomputable def lupanovCircuit (N : Nat) [NeZero N]
+private noncomputable def shannonCircuit (N : Nat) [NeZero N]
     (f : BitString N → Bool) (hN : 16 ≤ N) :
     Circuit Basis.andOr2 N 1 (szSections (addrBits N) (dataBits N)) where
-  gates i := (lupanovGateArray N f hN i).val
+  gates i := (shannonGateArray N f hN i).val
   outputs _ :=
     let lastWire := N + szSections (addrBits N) (dataBits N) - 1
     { op := .or, fanIn := 2, arityOk := rfl,
       inputs := fun _ => ⟨lastWire, by have := szSections_pos (addrBits N) (dataBits N); omega⟩,
       negated := fun _ => false }
-  acyclic i k := (lupanovGateArray N f hN i).property k
+  acyclic i k := (shannonGateArray N f hN i).property k
 
 /-! ### Correctness -/
 
@@ -796,7 +800,7 @@ private theorem colFun_at_actual_bits (N : Nat) [NeZero N]
 
 /-! ##### Key identity -/
 
-private theorem lupKQ (N : Nat) (hN : 16 ≤ N) :
+private theorem addrDataSum (N : Nat) (hN : 16 ≤ N) :
     addrBits N + dataBits N = N := by
   have := addr_data_sum N hN; omega
 
@@ -819,7 +823,7 @@ private noncomputable def andLayerSem (N : Nat)
     (y : Nat) (hy : y < 2 ^ dataBits N) : Bool :=
   let k := addrBits N
   let q := dataBits N
-  let hkq := lupKQ N hN
+  let hkq := addrDataSum N hN
   let data := shiftedBits N k q hkq x
   let dVal := Finset.sum (Finset.univ : Finset (Fin q))
     (fun j => if data j then 2^j.val else 0)
@@ -865,12 +869,12 @@ private theorem foldl_or_unique_true {n : Nat} {P : Nat → Bool}
 /-- The data sum: encode the data bits of x as a natural number. -/
 private noncomputable def dataSum (N : Nat) (hN : 16 ≤ N) (x : BitString N) : Nat :=
   Finset.sum (Finset.univ : Finset (Fin (dataBits N)))
-    (fun j => if shiftedBits N (addrBits N) (dataBits N) (lupKQ N hN) x j
+    (fun j => if shiftedBits N (addrBits N) (dataBits N) (addrDataSum N hN) x j
               then 2^j.val else 0)
 
 private theorem dataSum_lt (N : Nat) (hN : 16 ≤ N) (x : BitString N) :
     dataSum N hN x < 2 ^ dataBits N :=
-  sum_cond_pow_fin_lt (dataBits N) (shiftedBits N (addrBits N) (dataBits N) (lupKQ N hN) x)
+  sum_cond_pow_fin_lt (dataBits N) (shiftedBits N (addrBits N) (dataBits N) (addrDataSum N hN) x)
 
 /-- andLayerSem at y is false when y ≠ dataSum. -/
 private theorem andLayerSem_ne (N : Nat) [NeZero N]
@@ -886,7 +890,7 @@ private theorem andLayerSem_eq (N : Nat) [NeZero N]
     andLayerSem N f hN x (dataSum N hN x) (dataSum_lt N hN x) = f x := by
   unfold andLayerSem dataSum
   simp only [beq_self_eq_true, Bool.true_and]
-  exact colFun_at_actual_bits N f x (addrBits N) (dataBits N) (lupKQ N hN)
+  exact colFun_at_actual_bits N f x (addrBits N) (dataBits N) (addrDataSum N hN)
 
 private theorem or_andLayerSem_eq_f (N : Nat) [NeZero N]
     (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N) :
@@ -926,19 +930,19 @@ private theorem wireValue_dataLeaf (N : Nat) [NeZero N]
     (y : Nat) (hy : y < 2 ^ dataBits N)
     (hyW : N + 1 + (2 ^ dataBits N - 4) + y <
           N + szSections (addrBits N) (dataBits N)) :
-    (lupanovCircuit N f hN).wireValue x
+    (shannonCircuit N f hN).wireValue x
       ⟨N + 1 + (2 ^ dataBits N - 4) + y, hyW⟩ =
     (y == Finset.sum Finset.univ (fun j : Fin (dataBits N) =>
-      if shiftedBits N (addrBits N) (dataBits N) (lupKQ N hN) x j = true
+      if shiftedBits N (addrBits N) (dataBits N) (addrDataSum N hN) x j = true
       then 2 ^ j.val else 0)) := by
   have hq2 := dataBits_ge_two N hN
   have h4q := pow_ge_4 (dataBits N) hq2
   have hk3 := addrBits_ge_three N hN
-  have hkq := lupKQ N hN
+  have hkq := addrDataSum N hN
   have h2q1 : 2 ^ (dataBits N + 1) = 2 * 2 ^ dataBits N := pow_double (dataBits N)
   have hsB : ∀ (j : Nat) (hj : j < 2 ^ (dataBits N + 1) - 4)
       (hjW : N + 1 + j < N + szSections (addrBits N) (dataBits N)),
-      (lupanovCircuit N f hN).wireValue x ⟨N + 1 + j, hjW⟩ =
+      (shannonCircuit N f hN).wireValue x ⟨N + 1 + j, hjW⟩ =
       decide (∀ i : Fin (treeLevel j + 1),
         x ⟨addrBits N + i.val, by have := i.isLt; have := treeLevel_lt j (dataBits N) hj hq2; omega⟩ =
           Nat.testBit (treePos j (treeLevel j)) i.val) := by
@@ -947,8 +951,8 @@ private theorem wireValue_dataLeaf (N : Nat) [NeZero N]
       intro hj hjW
       set_option maxHeartbeats 3200000 in
       rw [Circuit.wireValue_ge _ _ _ (by show ¬(N + 1 + j < N); omega)]
-      change (lupanovGateArray N f hN ⟨_, _⟩).val.eval _ = _
-      unfold lupanovGateArray
+      change (shannonGateArray N f hN ⟨_, _⟩).val.eval _ = _
+      unfold shannonGateArray
       simp only [show N + 1 + j - N = 1 + j from by omega]
       rw [dif_neg (by omega : ¬(1 + j = 0))]
       rw [dif_pos (by unfold oC; omega : 1 + j < oC (dataBits N))]
@@ -1015,7 +1019,7 @@ private theorem wireValue_dataLeaf (N : Nat) [NeZero N]
           (treeLevel (treeParentIdx (treeLevel j) (treePos j (treeLevel j)))) =
           treePos j (treeLevel j) % 2 ^ treeLevel j := by
           rw [htlp]; exact treePos_parent (treeLevel j) (treePos j (treeLevel j)) hl2
-        change ((false ^^ (lupanovCircuit N f hN).wireValue x
+        change ((false ^^ (shannonCircuit N f hN).wireValue x
             ⟨N + 1 + treeParentIdx (treeLevel j) (treePos j (treeLevel j)), by omega⟩) &&
           (!(treePos j (treeLevel j)).testBit (treeLevel j) ^^
             x ⟨addrBits N + treeLevel j, by omega⟩)) =
@@ -1068,7 +1072,7 @@ private theorem wireValue_dataLeaf (N : Nat) [NeZero N]
       (treeLevel (2 ^ dataBits N - 4 + y)) = y from by rw [htl_leaf]; exact htp_leaf]
   have hFin_eq : treeLevel (2 ^ dataBits N - 4 + y) + 1 = dataBits N := by
     rw [htl_leaf]; omega
-  set data := shiftedBits N (addrBits N) (dataBits N) (lupKQ N hN) x
+  set data := shiftedBits N (addrBits N) (dataBits N) (addrDataSum N hN) x
   set dSum := Finset.sum Finset.univ (fun j : Fin (dataBits N) =>
     if data j then 2 ^ j.val else 0)
   rw [Bool.eq_iff_iff]
@@ -1096,14 +1100,14 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
     (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N)
     (y : Nat) (hy : y < 2 ^ dataBits N)
     (hyW : N + oD (addrBits N) (dataBits N) +
-      colPatIdx N f (addrBits N) (dataBits N) (lupKQ N hN) ⟨y, hy⟩ *
+      colPatIdx N f (addrBits N) (dataBits N) (addrDataSum N hN) ⟨y, hy⟩ *
         (2 ^ addrBits N - 1) + (2 ^ addrBits N - 2) <
       N + szSections (addrBits N) (dataBits N)) :
-    (lupanovCircuit N f hN).wireValue x
+    (shannonCircuit N f hN).wireValue x
       ⟨N + oD (addrBits N) (dataBits N) +
-        colPatIdx N f (addrBits N) (dataBits N) (lupKQ N hN) ⟨y, hy⟩ *
+        colPatIdx N f (addrBits N) (dataBits N) (addrDataSum N hN) ⟨y, hy⟩ *
           (2 ^ addrBits N - 1) + (2 ^ addrBits N - 2), hyW⟩ =
-    colFun N f (addrBits N) (dataBits N) (lupKQ N hN) ⟨y, hy⟩
+    colFun N f (addrBits N) (dataBits N) (addrDataSum N hN) ⟨y, hy⟩
       ⟨Finset.sum Finset.univ (fun j : Fin (addrBits N) =>
         if (x ⟨j.val, by have := j.isLt; have := addr_le_N N hN; omega⟩) = true
         then 2 ^ j.val else 0),
@@ -1112,7 +1116,7 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
   have hk3 := addrBits_ge_three N hN
   have hq2 := dataBits_ge_two N hN
   have h4k := pow_ge_4 (addrBits N) (by omega)
-  have hkq := lupKQ N hN
+  have hkq := addrDataSum N hN
   set k := addrBits N
   set q := dataBits N
   set p := colPatIdx N f k q hkq ⟨y, hy⟩
@@ -1123,12 +1127,12 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
   have hblk : 0 < 2 ^ k - 1 := by omega
   have addrLeaf : ∀ (a : Nat) (ha : a < 2 ^ k)
       (haW : N + oC q + (2 ^ k - 4) + a < N + szSections k q),
-      (lupanovCircuit N f hN).wireValue x
+      (shannonCircuit N f hN).wireValue x
         ⟨N + oC q + (2 ^ k - 4) + a, haW⟩ = decide (a = aSum) := by
     intro a ha haW
     have hsC : ∀ (j : Nat) (hj : j < 2 ^ (k + 1) - 4)
         (hjW : N + oC q + j < N + szSections k q),
-        (lupanovCircuit N f hN).wireValue x ⟨N + oC q + j, hjW⟩ =
+        (shannonCircuit N f hN).wireValue x ⟨N + oC q + j, hjW⟩ =
         decide (∀ i : Fin (treeLevel j + 1),
           x ⟨i.val, by have := i.isLt; have := treeLevel_lt j k hj (by omega); omega⟩ =
           Nat.testBit (treePos j (treeLevel j)) i.val) := by
@@ -1137,8 +1141,8 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
         intro hj hjW
         set_option maxHeartbeats 3200000 in
         rw [Circuit.wireValue_ge _ _ _ (by show ¬(N + oC q + j < N); omega)]
-        change (lupanovGateArray N f hN ⟨_, _⟩).val.eval _ = _
-        unfold lupanovGateArray
+        change (shannonGateArray N f hN ⟨_, _⟩).val.eval _ = _
+        unfold shannonGateArray
         simp only [show N + oC q + j - N = oC q + j from by omega]
         rw [dif_neg (by unfold oC; omega : ¬(oC q + j = 0))]
         rw [dif_neg (by unfold oC; omega : ¬(oC q + j < oC q))]
@@ -1197,7 +1201,7 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
             (treeLevel (treeParentIdx (treeLevel j) (treePos j (treeLevel j)))) =
             treePos j (treeLevel j) % 2 ^ treeLevel j := by
             rw [htlp]; exact treePos_parent (treeLevel j) (treePos j (treeLevel j)) hl2
-          change ((lupanovCircuit N f hN).wireValue x
+          change ((shannonCircuit N f hN).wireValue x
               ⟨N + oC (dataBits N) + treeParentIdx (treeLevel j) (treePos j (treeLevel j)),
                 by linarith [hpi_lt]⟩ &&
             (!(treePos j (treeLevel j)).testBit (treeLevel j) ^^
@@ -1262,16 +1266,16 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
     · intro h; subst h; intro i
       rw [testBit_sum_cond_pow_fin k addr i.val (by omega)]
   have constFalse_wire : ∀ (hW : N < N + szSections k q),
-      (lupanovCircuit N f hN).wireValue x ⟨N, hW⟩ = false := by
+      (shannonCircuit N f hN).wireValue x ⟨N, hW⟩ = false := by
     intro hW
     have h0N : (0 : Nat) < N := by linarith [hkq, hk3]
     set_option maxHeartbeats 800000 in
     rw [Circuit.wireValue_ge _ _ _ (show ¬((⟨N, hW⟩ : Fin _).val < N) from by show ¬(N < N); omega)]
-    change (lupanovGateArray N f hN ⟨_, _⟩).val.eval _ = _
-    unfold lupanovGateArray
-    change (lupanovGateArray N f hN ⟨N - N, by omega⟩).val.eval
-      ((lupanovCircuit N f hN).wireValue x) = false
-    unfold lupanovGateArray
+    change (shannonGateArray N f hN ⟨_, _⟩).val.eval _ = _
+    unfold shannonGateArray
+    change (shannonGateArray N f hN ⟨N - N, by omega⟩).val.eval
+      ((shannonCircuit N f hN).wireValue x) = false
+    unfold shannonGateArray
     rw [dif_pos (show N - N = 0 from by omega)]
     simp only [mkG, Gate.eval, Basis.andOr2, AONOp.eval,
       Fin.foldl_succ_last, Fin.foldl_zero, Bool.true_and]
@@ -1281,7 +1285,7 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
     cases x ⟨0, h0N⟩ <;> rfl
   have colChain : ∀ (r : Nat) (hr : r < 2 ^ k - 1)
       (hrW : N + oD k q + p * (2 ^ k - 1) + r < N + szSections k q),
-      (lupanovCircuit N f hN).wireValue x
+      (shannonCircuit N f hN).wireValue x
         ⟨N + oD k q + p * (2 ^ k - 1) + r, hrW⟩ =
       (List.range (r + 2)).foldl
         (fun acc a => acc || (Nat.testBit p a && decide (a = aSum))) false := by
@@ -1304,12 +1308,12 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
       omega
     have hoE_lt : oD k q + p * (2 ^ k - 1) + (2 ^ k - 1) ≤ oE k q := by
       show oD (addrBits N) (dataBits N) +
-        colPatIdx N f (addrBits N) (dataBits N) (lupKQ N hN) ⟨y, hy⟩ *
+        colPatIdx N f (addrBits N) (dataBits N) (addrDataSum N hN) ⟨y, hy⟩ *
           (2 ^ (addrBits N) - 1) + (2 ^ (addrBits N) - 1) ≤
         oE (addrBits N) (dataBits N)
       unfold oE oD
       have := Nat.mul_le_mul_right (2 ^ (addrBits N) - 1)
-        (show colPatIdx N f (addrBits N) (dataBits N) (lupKQ N hN) ⟨y, hy⟩ + 1 ≤
+        (show colPatIdx N f (addrBits N) (dataBits N) (addrDataSum N hN) ⟨y, hy⟩ + 1 ≤
           2 ^ (2 ^ addrBits N) from by exact hp_lt)
       nlinarith
     have hsel_bound (pos : Nat) (hpos : pos < 2 ^ k) :
@@ -1318,10 +1322,10 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
         N + oC q + (2 ^ k - 4) + 2 ^ k from by omega) hW_bound
     have selWire (pos : Nat) (hpos : pos < 2 ^ k) :
         (if Nat.testBit p pos then
-          (lupanovCircuit N f hN).wireValue x
+          (shannonCircuit N f hN).wireValue x
             ⟨N + oC q + (2 ^ k - 4) + pos, hsel_bound pos hpos⟩
          else
-          (lupanovCircuit N f hN).wireValue x ⟨N, by linarith [hsel_bound pos hpos]⟩) =
+          (shannonCircuit N f hN).wireValue x ⟨N, by linarith [hsel_bound pos hpos]⟩) =
         (Nat.testBit p pos && decide (pos = aSum)) := by
       split_ifs with htb
       · rw [addrLeaf pos hpos (hsel_bound pos hpos)]
@@ -1331,7 +1335,7 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
     induction r with
     | zero =>
       have h_ne0 : oD k q + p * (2 ^ k - 1) ≠ 0 := by
-        show oD (addrBits N) (dataBits N) + colPatIdx N f (addrBits N) (dataBits N) (lupKQ N hN)
+        show oD (addrBits N) (dataBits N) + colPatIdx N f (addrBits N) (dataBits N) (addrDataSum N hN)
           ⟨y, hy⟩ * (2 ^ (addrBits N) - 1) ≠ 0
         unfold oD oC; omega
       have h_ge_oC : ¬(oD k q + p * (2 ^ k - 1) < oC q) := by
@@ -1341,13 +1345,13 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
       have h_lt_oE : oD k q + p * (2 ^ k - 1) < oE k q := by linarith [hoE_lt]
       rw [Circuit.wireValue_ge _ _ _ (by
         show ¬(N + oD k q + p * (2 ^ k - 1) + 0 < N); omega)]
-      change (lupanovGateArray N f hN ⟨_, _⟩).val.eval _ = _
-      unfold lupanovGateArray
+      change (shannonGateArray N f hN ⟨_, _⟩).val.eval _ = _
+      unfold shannonGateArray
       simp only [show N + oD k q + p * (2 ^ k - 1) + 0 - N =
         oD k q + p * (2 ^ k - 1) from by omega]
       rw [dif_neg h_ne0, dif_neg h_ge_oC, dif_neg h_ge_oD, dif_pos h_lt_oE]
       simp only [show addrBits N = k from rfl, show dataBits N = q from rfl,
-        show colPatIdx N f k q (lupKQ N hN) ⟨y, hy⟩ = p from rfl]
+        show colPatIdx N f k q (addrDataSum N hN) ⟨y, hy⟩ = p from rfl]
       simp only [show oD k q + p * (2 ^ k - 1) - oD k q =
         p * (2 ^ k - 1) from by omega]
       simp_rw [show p * (2 ^ k - 1) % (2 ^ k - 1) = 0 from by
@@ -1369,7 +1373,7 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
       · simp only [Bool.eq_false_iff.mpr htb, Bool.false_and]; exact constFalse_wire _
     | succ r' ih =>
       have h_ne0' : oD k q + p * (2 ^ k - 1) + (r' + 1) ≠ 0 := by
-        show oD (addrBits N) (dataBits N) + colPatIdx N f (addrBits N) (dataBits N) (lupKQ N hN)
+        show oD (addrBits N) (dataBits N) + colPatIdx N f (addrBits N) (dataBits N) (addrDataSum N hN)
           ⟨y, hy⟩ * (2 ^ (addrBits N) - 1) + (r' + 1) ≠ 0
         unfold oD oC; omega
       have h_ge_oC' : ¬(oD k q + p * (2 ^ k - 1) + (r' + 1) < oC q) := by
@@ -1379,13 +1383,13 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
       have h_lt_oE' : oD k q + p * (2 ^ k - 1) + (r' + 1) < oE k q := by linarith [hoE_lt]
       rw [Circuit.wireValue_ge _ _ _ (by
         show ¬(N + oD k q + p * (2 ^ k - 1) + (r' + 1) < N); omega)]
-      change (lupanovGateArray N f hN ⟨_, _⟩).val.eval _ = _
-      unfold lupanovGateArray
+      change (shannonGateArray N f hN ⟨_, _⟩).val.eval _ = _
+      unfold shannonGateArray
       simp only [show N + oD k q + p * (2 ^ k - 1) + (r' + 1) - N =
         oD k q + p * (2 ^ k - 1) + (r' + 1) from by omega]
       rw [dif_neg h_ne0', dif_neg h_ge_oC', dif_neg h_ge_oD', dif_pos h_lt_oE']
       simp only [show addrBits N = k from rfl, show dataBits N = q from rfl,
-        show colPatIdx N f k q (lupKQ N hN) ⟨y, hy⟩ = p from rfl]
+        show colPatIdx N f k q (addrDataSum N hN) ⟨y, hy⟩ = p from rfl]
       simp_rw [show (oD k q + p * (2 ^ k - 1) + (r' + 1) - oD k q) =
         p * (2 ^ k - 1) + (r' + 1) from by omega]
       simp only [show (p * (2 ^ k - 1) + (r' + 1)) / (2 ^ k - 1) = p from
@@ -1408,7 +1412,7 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
       · split_ifs with htb2
         · simp only [htb2, Bool.true_and]; exact addrLeaf _ (by omega) _
         · simp only [Bool.eq_false_iff.mpr htb2, Bool.false_and]; exact constFalse_wire _
-  change (lupanovCircuit N f hN).wireValue x
+  change (shannonCircuit N f hN).wireValue x
     ⟨N + oD k q + p * (2 ^ k - 1) + (2 ^ k - 2), by omega⟩ = _
   rw [colChain (2 ^ k - 2) (by omega) (by omega)]
   rw [show (2 ^ k - 2) + 2 = 2 ^ k from by omega]
@@ -1431,7 +1435,7 @@ private theorem wireValue_orChain_sem (N : Nat) [NeZero N]
     (r : Nat) (hr : r < 2 ^ dataBits N - 1)
     (hW : N + oF (addrBits N) (dataBits N) + r <
           N + szSections (addrBits N) (dataBits N)) :
-    (lupanovCircuit N f hN).wireValue x
+    (shannonCircuit N f hN).wireValue x
       ⟨N + oF (addrBits N) (dataBits N) + r, hW⟩ =
     (List.range (r + 2)).foldl
       (fun acc y => acc || if h : y < 2 ^ dataBits N
@@ -1439,15 +1443,15 @@ private theorem wireValue_orChain_sem (N : Nat) [NeZero N]
   have andLayer_sem : ∀ (y : Nat) (hy : y < 2 ^ dataBits N)
       (hyW : N + oE (addrBits N) (dataBits N) + y <
             N + szSections (addrBits N) (dataBits N)),
-      (lupanovCircuit N f hN).wireValue x
+      (shannonCircuit N f hN).wireValue x
         ⟨N + oE (addrBits N) (dataBits N) + y, hyW⟩ =
       andLayerSem N f hN x y hy := by
     intro y hy hyW
     set_option maxHeartbeats 3200000 in
     rw [Circuit.wireValue_ge _ _ _ (by
       show ¬(N + oE (addrBits N) (dataBits N) + y < N); omega)]
-    change (lupanovGateArray N f hN ⟨_, _⟩).val.eval _ = _
-    unfold lupanovGateArray
+    change (shannonGateArray N f hN ⟨_, _⟩).val.eval _ = _
+    unfold shannonGateArray
     simp only [show N + oE (addrBits N) (dataBits N) + y - N =
       oE (addrBits N) (dataBits N) + y from by omega]
     rw [dif_neg (by unfold oE oD oC; have := pow_ge_4 (dataBits N) (dataBits_ge_two N hN); omega :
@@ -1480,8 +1484,8 @@ private theorem wireValue_orChain_sem (N : Nat) [NeZero N]
     set_option maxHeartbeats 3200000 in
     rw [Circuit.wireValue_ge _ _ _ (show ¬((⟨N + oF (addrBits N) (dataBits N) + 0, hW⟩ :
         Fin _).val < N) from by show ¬(N + oF (addrBits N) (dataBits N) + 0 < N); omega)]
-    change (lupanovGateArray N f hN ⟨_, _⟩).val.eval _ = _
-    unfold lupanovGateArray
+    change (shannonGateArray N f hN ⟨_, _⟩).val.eval _ = _
+    unfold shannonGateArray
     simp only [show N + oF (addrBits N) (dataBits N) + 0 - N =
       oF (addrBits N) (dataBits N) + 0 from by omega]
     rw [dif_neg (by unfold oF oE oD oC; omega : ¬(oF (addrBits N) (dataBits N) + 0 = 0))]
@@ -1500,9 +1504,9 @@ private theorem wireValue_orChain_sem (N : Nat) [NeZero N]
       Fin.val_last, Fin.val_castSucc, ite_false,
       show (0 : Nat) = 0 from rfl, show ¬((1 : Nat) = 0) from by omega,
       show (0 : Nat) + 1 = 1 from by omega]
-    show ((lupanovCircuit N f hN).wireValue x
+    show ((shannonCircuit N f hN).wireValue x
         ⟨N + oE (addrBits N) (dataBits N) + 0, by linarith⟩ ||
-      (lupanovCircuit N f hN).wireValue x
+      (shannonCircuit N f hN).wireValue x
         ⟨N + oE (addrBits N) (dataBits N) + 1, by linarith⟩) =
       List.foldl (fun acc y => acc || if h : y < 2 ^ dataBits N
         then andLayerSem N f hN x y h else false) false (List.range (0 + 2))
@@ -1516,8 +1520,8 @@ private theorem wireValue_orChain_sem (N : Nat) [NeZero N]
     set_option maxHeartbeats 3200000 in
     rw [Circuit.wireValue_ge _ _ _ (show ¬((⟨N + oF (addrBits N) (dataBits N) + (r' + 1), hW⟩ :
         Fin _).val < N) from by show ¬(N + oF (addrBits N) (dataBits N) + (r' + 1) < N); omega)]
-    change (lupanovGateArray N f hN ⟨_, _⟩).val.eval _ = _
-    unfold lupanovGateArray
+    change (shannonGateArray N f hN ⟨_, _⟩).val.eval _ = _
+    unfold shannonGateArray
     simp only [show N + oF (addrBits N) (dataBits N) + (r' + 1) - N =
       oF (addrBits N) (dataBits N) + (r' + 1) from by omega]
     rw [dif_neg (by unfold oF oE oD oC; omega :
@@ -1543,8 +1547,8 @@ private theorem wireValue_orChain_sem (N : Nat) [NeZero N]
       show ¬((1 : Nat) = 0) from by omega]
     have hih := ih hr' hW'
     simp only [show r' + 1 + 1 = r' + 2 from by omega]
-    show ((lupanovCircuit N f hN).wireValue x ⟨N + oF (addrBits N) (dataBits N) + r', hW'⟩ ||
-         (lupanovCircuit N f hN).wireValue x
+    show ((shannonCircuit N f hN).wireValue x ⟨N + oF (addrBits N) (dataBits N) + r', hW'⟩ ||
+         (shannonCircuit N f hN).wireValue x
            ⟨N + oE (addrBits N) (dataBits N) + (r' + 2), by linarith⟩) =
         List.foldl (fun acc y => acc || if h : y < 2 ^ dataBits N
           then andLayerSem N f hN x y h else false) false (List.range (r' + 1 + 2))
@@ -1568,7 +1572,7 @@ private theorem lastOrChain_eq_f (N : Nat) [NeZero N]
     (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N)
     (hW : N + oF (addrBits N) (dataBits N) + (2 ^ dataBits N - 2) <
           N + szSections (addrBits N) (dataBits N)) :
-    (lupanovCircuit N f hN).wireValue x
+    (shannonCircuit N f hN).wireValue x
       ⟨N + oF (addrBits N) (dataBits N) + (2 ^ dataBits N - 2), hW⟩ = f x := by
   have hq2 : 2 ≤ dataBits N := dataBits_ge_two N hN
   have h4q : 4 ≤ 2 ^ dataBits N := pow_ge_4 (dataBits N) hq2
@@ -1583,14 +1587,14 @@ private theorem lastOrChain_eq_f (N : Nat) [NeZero N]
 
 /-! ##### Main correctness theorem -/
 
-/-- The last wire of the Lupanov circuit evaluates to f x.
+/-- The last wire of the Shannon circuit evaluates to f x.
 
 The correctness argument proceeds in two steps:
 1. The last wire index = oF(k,q) + (2^q - 2)  (lastWire_is_orChain_last)
 2. That wire evaluates to f(x)  (lastOrChain_eq_f) -/
-private theorem lupanov_lastWire_correct (N : Nat) [NeZero N]
+private theorem shannon_lastWire_correct (N : Nat) [NeZero N]
     (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N) :
-    (lupanovCircuit N f hN).wireValue x
+    (shannonCircuit N f hN).wireValue x
       ⟨N + szSections (addrBits N) (dataBits N) - 1,
        by have := szSections_pos (addrBits N) (dataBits N); omega⟩ = f x := by
   -- Step 1: rewrite last wire index as oF k q + (2^q - 2)
@@ -1612,14 +1616,14 @@ private theorem lupanov_lastWire_correct (N : Nat) [NeZero N]
   -- Step 2: that wire = f(x)
   exact lastOrChain_eq_f N f hN x hW_or
 
-private theorem lupanovCircuit_correct (N : Nat) [NeZero N]
+private theorem shannonCircuit_correct (N : Nat) [NeZero N]
     (f : BitString N → Bool) (hN : 16 ≤ N) (x : BitString N) :
-    ((lupanovCircuit N f hN).eval x) 0 = f x := by
+    ((shannonCircuit N f hN).eval x) 0 = f x := by
   -- eval at output 0 = outputs-gate.eval(wireValue)
-  simp only [Circuit.eval, lupanovCircuit, Gate.eval, Basis.andOr2]
+  simp only [Circuit.eval, shannonCircuit, Gate.eval, Basis.andOr2]
   rw [AONOp.eval_two_or]
   simp only [Bool.false_xor, Bool.or_self]
-  exact lupanov_lastWire_correct N f hN x
+  exact shannon_lastWire_correct N f hN x
 
 private theorem szSections_le_bound (N : Nat) (hN : 16 ≤ N) :
     szSections (addrBits N) (dataBits N) + 1 ≤
@@ -1636,28 +1640,28 @@ private theorem szSections_le_bound (N : Nat) (hN : 16 ≤ N) :
       _ = 2 ^ (2 ^ addrBits N + addrBits N) := by rw [← Nat.pow_add]
   omega
 
-theorem lupanov_assembly (N : Nat) [NeZero N] (hN : 16 ≤ N)
+theorem shannon_assembly (N : Nat) [NeZero N] (hN : 16 ≤ N)
     (f : BitString N → Bool) :
     ∃ G, ∃ c : Circuit Basis.andOr2 N 1 G,
       (fun x => (c.eval x) 0) = f ∧
       G + 1 ≤ 4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N +
           2 ^ (2 ^ addrBits N + addrBits N) := by
   exact ⟨szSections (addrBits N) (dataBits N),
-    lupanovCircuit N f hN,
-    funext (lupanovCircuit_correct N f hN),
+    shannonCircuit N f hN,
+    funext (shannonCircuit_correct N f hN),
     szSections_le_bound N hN⟩
 
 -- ════════════════════════════════════════════════════════════════
 -- Section 5: Main Theorem
 -- ════════════════════════════════════════════════════════════════
 
-/-- **Lupanov circuit construction**: For `N ≥ 16`, every Boolean function
+/-- **Shannon circuit construction**: For `N ≥ 16`, every Boolean function
     has a fan-in-2 AND/OR circuit of size `≤ 18 · 2^N / N`. -/
-theorem lupanov_construction (N : Nat) [NeZero N] (hN : 16 ≤ N)
+theorem shannon_construction (N : Nat) [NeZero N] (hN : 16 ≤ N)
     (f : BitString N → Bool) :
     ∃ G, ∃ c : Circuit Basis.andOr2 N 1 G,
       (fun x => (c.eval x) 0) = f ∧ c.size ≤ 18 * 2 ^ N / N := by
-  obtain ⟨G, c, heval, hG⟩ := lupanov_assembly N hN f
-  exact ⟨G, c, heval, by rw [Circuit.size]; exact lupanov_size_le N hN G hG⟩
+  obtain ⟨G, c, heval, hG⟩ := shannon_assembly N hN f
+  exact ⟨G, c, heval, by rw [Circuit.size]; exact shannon_size_le N hN G hG⟩
 
-end Lupanov
+end ShannonUpper

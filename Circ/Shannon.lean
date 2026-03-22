@@ -1,6 +1,7 @@
 import Circ.Internal.Bridge
+import Circ.Internal.ShannonUpper
 
-/-! # Shannon Counting Lower Bound
+/-! # Shannon Bounds
 
 For `N ≥ 6`, there exists a Boolean function on `N` inputs that cannot be
 computed by any fan-in-2 AND/OR circuit with fewer than `2^N / (5N)` gates.
@@ -24,6 +25,11 @@ so `G + 1` is the total gate count (`Circuit.size` for a single-output circuit).
 
 When `Basis.andOr2` is known to be complete, this yields a
 `size_complexity` bound via `shannon_size_complexity`.
+
+* `shannon_upper_bound` — for sufficiently large `N`, every Boolean function
+  on `N` inputs has `size_complexity` at most `18 · 2^N / N`.
+
+Together these establish that worst-case circuit complexity is `Θ(2^N / N)`.
 -/
 
 /-- **Shannon lower bound in terms of `size_complexity`**: for `N ≥ 6`,
@@ -39,3 +45,21 @@ theorem shannon_size_complexity (N : Nat) [NeZero N] (hN : 6 ≤ N)
   obtain ⟨G, c, hs, hc⟩ := Circuit.size_complexity_witness (B := Basis.andOr2) f
   have : c.size ≤ 2 ^ N / (5 * N) := hs ▸ hle
   exact hf G c (by rw [Circuit.size] at this; omega) hc
+
+/-- **Shannon upper bound**: there exists an explicit constant `C` such that
+    for sufficiently large `N`, every Boolean function on `N` inputs can be
+    computed by a fan-in-2 AND/OR circuit of size at most `C * 2^N / N`.
+
+    Combined with `shannon_size_complexity`, this gives `Θ(2^N / N)`.
+
+    This is the full-column-library variant (C = 18). The tighter
+    `(1 + o(1)) · 2^N / N` bound due to Lupanov (1958) uses column
+    grouping and is not yet formalized. -/
+theorem shannon_upper_bound [CompleteBasis Basis.andOr2] :
+    ∃ C : Nat, ∃ N₀ : Nat, ∀ N : Nat, N₀ ≤ N → ∀ [NeZero N],
+      ∀ f : BitString N → Bool,
+        Circuit.size_complexity Basis.andOr2 f ≤ C * 2 ^ N / N := by
+  refine ⟨18, 16, fun N hN => ?_⟩
+  intro; intro f
+  obtain ⟨G, c, heval, hsize⟩ := ShannonUpper.shannon_construction N hN f
+  exact le_trans (Circuit.size_complexity_le c f heval) hsize
