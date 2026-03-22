@@ -53,7 +53,7 @@ theorem xorBool_insertAt {N : Nat} (x : BitString N) (a : Fin (N + 1)) (b : Bool
       --       b.xor ((x 0).xor (xorBool n (x ∘ Fin.succ)))
       rw [Bool.xor_left_comm]
 
-/-! ## Section 3: CircDesc Insensitivity -/
+/-! ## CircDesc Insensitivity -/
 
 /-- If no gate references input `a`, wire values are unchanged when `a` is modified. -/
 theorem wireValD_eq_of_unreferenced
@@ -109,7 +109,7 @@ theorem evalD_essential_means_referenced
   exact wireValD_eq_of_unreferenced d a (!x a)
     (fun g => ⟨(hall g).1, (hall g).2⟩) x ⟨N + s - 1, by omega⟩ hw
 
-/-! ## Section 5: Circuit Restriction -/
+/-! ## Circuit Restriction -/
 
 /-- Remap a wire reference when fixing input `a`. -/
 def remapWireR {N s : Nat} (a : Fin (N + 1)) (b : Bool) (g : Fin s)
@@ -144,7 +144,6 @@ private theorem remapWireR_effective {N s : Nat} (d : CircDesc (N + 1) s)
   split
   · -- wi.val = a.val: self-reference, effective input = ni.xor b
     rename_i heq
-    simp only [Fin.val_mk]
     have : ¬(N + (w.val - N) < w.val) := by omega
     simp only [this, ite_false, Bool.xor_false]
     have : wi.val < w.val + 1 := by have := a.isLt; omega
@@ -153,11 +152,10 @@ private theorem remapWireR_effective {N s : Nat} (d : CircDesc (N + 1) s)
     congr 1
     simp only [insertAt, heq]
     have : ¬(a.val < a.val) := by omega
-    simp only [this, show ¬(wi.val < a.val) from by omega, dite_false, dite_true]
+    simp only [this, dite_false, dite_true]
   · split
     · -- wi.val < a.val: same index, shifted
       rename_i hne hlt
-      simp only [Fin.val_mk]
       have hwi : wi.val < w.val := by omega
       have hwi' : wi.val < w.val + 1 := by omega
       simp only [hwi, ite_true, hwi', ite_true]
@@ -166,7 +164,6 @@ private theorem remapWireR_effective {N s : Nat} (d : CircDesc (N + 1) s)
       simp only [hlt, ite_true]
     · -- wi.val > a.val: index - 1
       rename_i hne hge
-      simp only [Fin.val_mk]
       by_cases hwi : wi.val - 1 < w.val
       · have : wi.val < w.val + 1 := by omega
         simp only [hwi, ite_true, this, ite_true]
@@ -191,7 +188,7 @@ private theorem wireValD_restrictD {N s : Nat} (d : CircDesc (N + 1) s)
     split <;> rename_i hlt
     · -- w < a: lifted wire is w, also a primary input
       rw [wireValD]; simp only [show w.val < N + 1 from by omega, dite_true]
-      simp only [insertAt, show (⟨w.val, _⟩ : Fin (N + 1 + s)).val = w.val from rfl, hlt, dite_true]
+      simp only [insertAt, hlt, dite_true]
     · -- w ≥ a: lifted wire is w+1, also a primary input (w+1 ≤ N < N+1)
       conv_rhs => rw [wireValD]; simp only [show w.val + 1 < N + 1 from by omega, dite_true]
       simp only [insertAt]
@@ -223,7 +220,7 @@ theorem evalD_restrictD {N s : Nat} (d : CircDesc (N + 1) s)
   simp only [this, ite_false]
   congr 1; ext; simp; omega
 
-/-! ## Section 6: Gate Elimination -/
+/-! ## Gate Elimination -/
 
 /-- How to redirect references to an eliminated gate. -/
 inductive GateRedirect (W : Nat) where
@@ -289,14 +286,14 @@ private theorem remapWireE_effective {N s : Nat} (d : CircDesc N (s + 1))
   -- Get liftWireE value info
   have hlift_val : (liftWireE g w).val =
       if w.val < N + g.val then w.val else w.val + 1 := by
-    simp [liftWireE]; split <;> simp [Fin.val_mk]
+    simp [liftWireE]; split <;> simp
   simp only [remapWireE]
   -- Case 1: wi < N (primary input)
   split
   · rename_i hwi
     have hwi_w : wi.val < w.val := by omega
     have hwi_lift : wi.val < (liftWireE g w).val := by rw [hlift_val]; split <;> omega
-    simp only [Fin.val_mk, hwi_w, ite_true, hwi_lift, ite_true]
+    simp only [hwi_w, ite_true, hwi_lift, ite_true]
     congr 1; rw [ih ⟨wi.val, by omega⟩ hwi_w]; congr 1
     show liftWireE g ⟨wi.val, _⟩ = ⟨wi.val, _⟩
     simp [liftWireE, show wi.val < N + g.val from by omega]
@@ -307,7 +304,7 @@ private theorem remapWireE_effective {N s : Nat} (d : CircDesc N (s + 1))
       · -- Case 2a: i < g (forward reference, was false)
         rename_i hi_lt
         have hw_lt_g : w.val < N + g.val := by omega
-        simp only [Fin.val_mk, show ¬(N + (w.val - N) < w.val) from by omega, ite_false, Bool.xor_false]
+        simp only [show ¬(N + (w.val - N) < w.val) from by omega, ite_false, Bool.xor_false]
         simp only [show ¬(wi.val < (liftWireE g w).val) from by rw [hlift_val]; simp [hw_lt_g]; omega,
           ite_false, Bool.xor_false]
       · -- Case 2b: i ≥ g (back reference)
@@ -315,7 +312,7 @@ private theorem remapWireE_effective {N s : Nat} (d : CircDesc N (s + 1))
         have hw_ge : ¬(w.val < N + g.val) := by omega
         cases rd with
         | const c =>
-          simp only [Fin.val_mk, show ¬(N + (w.val - N) < w.val) from by omega, ite_false, Bool.xor_false]
+          simp only [show ¬(N + (w.val - N) < w.val) from by omega, ite_false, Bool.xor_false]
           simp only [show wi.val < (liftWireE g w).val from by rw [hlift_val]; simp [hw_ge]; omega, ite_true]
           have hrd_spec := hrd x; simp only at hrd_spec
           -- wireValD d x ⟨N + g.val, ...⟩ = c, need wireValD d x ⟨wi.val, ...⟩ = c
@@ -338,7 +335,6 @@ private theorem remapWireE_effective {N s : Nat} (d : CircDesc N (s + 1))
     · split
       · -- Case 3: N ≤ wi < N + g.val, wi ≠ N + g.val
         rename_i hne hwi_ne hwi_lt
-        simp only [Fin.val_mk]
         by_cases hwi_w : wi.val < w.val
         · -- Back reference
           have hwi_lift : wi.val < (liftWireE g w).val := by rw [hlift_val]; split <;> omega
@@ -352,7 +348,6 @@ private theorem remapWireE_effective {N s : Nat} (d : CircDesc N (s + 1))
           simp only [hwi_w, ite_false, hwi_lift, ite_false]
       · -- Case 4: wi > N + g.val
         rename_i hne hwi_ne hwi_ge
-        simp only [Fin.val_mk]
         by_cases hwi_lt : wi.val - 1 < w.val
         · -- Back reference (shifted)
           -- wi > N + g.val and wi - 1 < w.val, so wi ≤ w.val, so wi.val ≤ w.val
@@ -362,7 +357,7 @@ private theorem remapWireE_effective {N s : Nat} (d : CircDesc N (s + 1))
           simp only [hwi_lt, ite_true, hwi_lift, ite_true]
           congr 1; rw [ih ⟨wi.val - 1, by omega⟩ hwi_lt]; congr 1
           show liftWireE g ⟨wi.val - 1, _⟩ = ⟨wi.val, _⟩
-          simp only [liftWireE, Fin.val_mk, show ¬(wi.val - 1 < N + g.val) from by omega, ite_false]
+          simp only [liftWireE, show ¬(wi.val - 1 < N + g.val) from by omega, ite_false]
           ext; simp; omega
         · have hwi_lift : ¬(wi.val < (liftWireE g w).val) := by rw [hlift_val]; split <;> omega
           simp only [hwi_lt, ite_false, hwi_lift, ite_false]
@@ -389,7 +384,7 @@ private theorem wireValD_elimGateD {N s : Nat} (d : CircDesc N (s + 1))
     conv_lhs => rw [wireValD]; simp only [hw, dite_false]
     have hlift_val : (liftWireE g w).val =
         if w.val < N + g.val then w.val else w.val + 1 := by
-      unfold liftWireE; split <;> simp only [Fin.val_mk]
+      unfold liftWireE; split <;> simp only []
     have hw_lift : ¬(liftWireE g w).val < N := by
       simp only [hlift_val]; split <;> omega
     conv_rhs => rw [wireValD]; simp only [hw_lift, dite_false]
@@ -399,7 +394,7 @@ private theorem wireValD_elimGateD {N s : Nat} (d : CircDesc N (s + 1))
       have hw_lt : w.val < N + g.val := by omega
       have hgi : (liftWireE g w).val - N = w.val - N := by
         rw [liftWireE_val_lt hw_lt]
-      simp only [elimGateD, Fin.val_mk, hig, dite_true, hgi]
+      simp only [elimGateD, hig, dite_true, hgi]
       split <;> (congr 1 <;> [skip; skip]) <;>
         exact remapWireE_effective d g rd hrd hrd_wire x w hw _ _
           (fun w' hw' => wireValD_elimGateD d g rd hrd hrd_wire x w')
@@ -407,7 +402,7 @@ private theorem wireValD_elimGateD {N s : Nat} (d : CircDesc N (s + 1))
       have hw_ge : ¬(w.val < N + g.val) := by omega
       have hgi : (liftWireE g w).val - N = w.val - N + 1 := by
         rw [liftWireE_val_ge hw_ge]; omega
-      simp only [elimGateD, Fin.val_mk, hig, dite_false, hgi]
+      simp only [elimGateD, hig, dite_false, hgi]
       split <;> (congr 1 <;> [skip; skip]) <;>
         exact remapWireE_effective d g rd hrd hrd_wire x w hw _ _
           (fun w' hw' => wireValD_elimGateD d g rd hrd hrd_wire x w')
@@ -428,7 +423,7 @@ theorem evalD_elimGateD {N s : Nat} (d : CircDesc N (s + 1))
   have : ¬(N + s - 1 < N + g.val) := by omega
   simp only [this, ite_false]; ext; simp; omega
 
-/-! ## Section 7: XOR needs ≥ 3 gates -/
+/-! ## XOR needs ≥ 3 gates -/
 
 /-- XOR on N ≥ 2 inputs cannot be computed by a circuit with ≤ 2 gates. -/
 private theorem xor_needs_three_gates {N s : Nat} (hN : 2 ≤ N) (hs : 0 < s) (hs2 : s ≤ 2) :
@@ -458,7 +453,7 @@ private theorem xor_needs_three_gates {N s : Nat} (hN : 2 ≤ N) (hs : 0 < s) (h
         _ ≤ ∑ _ : Fin s, 2 := Finset.sum_le_sum fun g _ => by
             apply le_trans (Finset.card_insert_le _ _)
             simp [Finset.card_singleton]
-        _ = 2 * s := by simp [Finset.sum_const, Finset.card_fin, mul_comm]
+        _ = 2 * s := by simp [Finset.sum_const, mul_comm]
     have hess_mem : ∀ a : Fin N, (a : Nat) ∈ refs := by
       intro a
       obtain ⟨g, hg⟩ := hess a
@@ -473,7 +468,7 @@ private theorem xor_needs_three_gates {N s : Nat} (hN : 2 ≤ N) (hs : 0 < s) (h
             exact hess_mem a
     omega
 
-/-! ## Section 8: Restriction eliminates two gates -/
+/-! ## Restriction eliminates two gates -/
 
 /-- The last gate of a circuit computing XOR cannot directly read any input.
     Proof: with the killing value, the last gate becomes constant, but XOR is non-constant. -/
@@ -513,14 +508,13 @@ private theorem last_gate_no_input_ref {n s : Nat} (d : CircDesc (n + 1) s)
                show n + 1 + s - 1 - (n + 1) = s - 1 from by omega, hg_eq]
     -- Both sides compute gate g. First wire input has val = 0.
     have hw1_lt : (d g).2.1.1.val < n + 1 + s - 1 := by omega
-    simp only [hg0, hw1_lt, ite_true]
+    simp only [hg0]
     -- Unfold wireValD at wire 0 → primary input
     conv_lhs => rw [show wireValD d x₀ ⟨0, by omega⟩ = x₀ ⟨0, by omega⟩ from by
       rw [wireValD]; simp [show (0 : Nat) < n + 1 from by omega]]
     conv_rhs => rw [show wireValD d (Function.update x₀ ⟨1, by omega⟩ (!x₀ ⟨1, by omega⟩))
       ⟨0, by omega⟩ = x₀ ⟨0, by omega⟩ from by
-      rw [wireValD]; simp [show (0 : Nat) < n + 1 from by omega,
-        Function.update_of_ne hfin_ne]]
+      rw [wireValD]; simp [show (0 : Nat) < n + 1 from by omega]]
     have hx0 : x₀ ⟨0, by omega⟩ = kv := Function.update_self ..
     simp only [hx0]
     -- Simplify the 0 < n + 1 + s - 1 condition
@@ -540,13 +534,12 @@ private theorem last_gate_no_input_ref {n s : Nat} (d : CircDesc (n + 1) s)
     simp only [show ¬(n + 1 + s - 1 < n + 1) from by omega, dite_false,
                show n + 1 + s - 1 - (n + 1) = s - 1 from by omega, hg_eq]
     have hw2_lt : (d g).2.1.2.val < n + 1 + s - 1 := by omega
-    simp only [hg0, hw2_lt, ite_true]
+    simp only [hg0]
     conv_lhs => rw [show wireValD d x₀ ⟨0, by omega⟩ = x₀ ⟨0, by omega⟩ from by
       rw [wireValD]; simp [show (0 : Nat) < n + 1 from by omega]]
     conv_rhs => rw [show wireValD d (Function.update x₀ ⟨1, by omega⟩ (!x₀ ⟨1, by omega⟩))
       ⟨0, by omega⟩ = x₀ ⟨0, by omega⟩ from by
-      rw [wireValD]; simp [show (0 : Nat) < n + 1 from by omega,
-        Function.update_of_ne hfin_ne]]
+      rw [wireValD]; simp [show (0 : Nat) < n + 1 from by omega]]
     have hx0 : x₀ ⟨0, by omega⟩ = kv := Function.update_self ..
     simp only [hx0]
     simp only [show (0 : Nat) < n + 1 + s - 1 from by omega, ite_true]
@@ -853,7 +846,7 @@ theorem restriction_eliminates_two {n s : Nat} (d : CircDesc (n + 1) s)
                 simp only [this]; rcases isAnd <;> simp,
                fun w' flip h => by
                 simp only [GateRedirect.wire.injEq] at h; obtain ⟨rfl, _⟩ := h
-                simp only [Fin.val_mk]; exact hw2_back⟩⟩
+                exact hw2_back⟩⟩
           · -- Second wire forward-ref after restriction (proof 3)
             exact ⟨.const (if isAnd then n1 && n2 else n1 || n2), ⟨fun x => by
   
@@ -929,7 +922,7 @@ theorem restriction_eliminates_two {n s : Nat} (d : CircDesc (n + 1) s)
                 simp only [this]; rcases isAnd <;> simp,
                fun w' flip h => by
                 simp only [GateRedirect.wire.injEq] at h; obtain ⟨rfl, _⟩ := h
-                simp only [Fin.val_mk]; exact hw1_back⟩⟩
+                exact hw1_back⟩⟩
           · -- proof 6: w1≠0 forward-ref, w2=0 (const case)
             exact ⟨.const (if isAnd then n1 && n2 else n1 || n2), ⟨fun x => by
   
@@ -1131,7 +1124,7 @@ theorem restriction_eliminates_two {n s : Nat} (d : CircDesc (n + 1) s)
         (by simp only [evalD]
             exact wireValD_eq_sole_unreferenced d ⟨0, by omega⟩ true g₁ honly hunref_all
               (fun _ => false) ⟨(n + 1) + (t + 3) - 1, by omega⟩
-              (by simp only [Fin.val_mk]; omega) (by simp only [Fin.val_mk]; omega))
+              (by dsimp only []; omega) (by dsimp only []; omega))
     -- Strengthen: back-reference exists (g'.val > g₁.val)
     have hg₁_back_ref : ∃ g' : Fin (t + 3), g₁.val < g'.val ∧
         ((d g').2.1.1.val = (n + 1) + g₁.val ∨ (d g').2.1.2.val = (n + 1) + g₁.val) := by
@@ -1141,11 +1134,11 @@ theorem restriction_eliminates_two {n s : Nat} (d : CircDesc (n + 1) s)
             exact wireValD_eq_sole_no_back_ref d ⟨0, by omega⟩ true g₁ honly
               (fun g' hgt => h g' hgt) (fun _ => false)
               ⟨(n + 1) + (t + 3) - 1, by omega⟩
-              (by simp only [Fin.val_mk]; omega)
-              (by simp only [Fin.val_mk]; omega))
+              (by dsimp only []; omega)
+              (by dsimp only []; omega))
     obtain ⟨g', hg'_gt, hg'_ref⟩ := hg₁_back_ref
     -- Choose killing value: ensures g₁ has constant output !(d g₁).1
-    have ⟨b_kill, hg₁_const⟩ : ∃ b : Bool, ∀ x : BitString n,
+    obtain ⟨b_kill, hg₁_const⟩ : ∃ b : Bool, ∀ x : BitString n,
         wireValD (restrictD d ⟨0, by omega⟩ b) x ⟨n + g₁.val, by omega⟩ = !(d g₁).1 := by
       rcases hg₁ with h1 | h2
       · refine ⟨(d g₁).2.2.1.xor (!(d g₁).1), fun x =>
@@ -1186,17 +1179,17 @@ theorem restriction_eliminates_two {n s : Nat} (d : CircDesc (n + 1) s)
     have hg'_rb_w1 : (d_rb g').2.1.1.val = (d g').2.1.1.val - 1 := by
       simp only [d_rb, restrictD, remapWireR]
       have h1 : ¬((d g').2.1.1.val = (⟨0, by omega⟩ : Fin (n + 1)).val) := by
-        simp only [Fin.val_mk]; exact hg'_no_zero.1
+        exact hg'_no_zero.1
       have h2 : ¬((d g').2.1.1.val < (⟨0, by omega⟩ : Fin (n + 1)).val) := by
-        simp only [Fin.val_mk]; omega
-      simp only [h1, dite_false, h2, ite_false]
+        dsimp only []; omega
+      simp only [h1, dite_false, h2]
     have hg'_rb_w2 : (d_rb g').2.1.2.val = (d g').2.1.2.val - 1 := by
       simp only [d_rb, restrictD, remapWireR]
       have h1 : ¬((d g').2.1.2.val = (⟨0, by omega⟩ : Fin (n + 1)).val) := by
-        simp only [Fin.val_mk]; exact hg'_no_zero.2
+        exact hg'_no_zero.2
       have h2 : ¬((d g').2.1.2.val < (⟨0, by omega⟩ : Fin (n + 1)).val) := by
-        simp only [Fin.val_mk]; omega
-      simp only [h1, dite_false, h2, ite_false]
+        dsimp only []; omega
+      simp only [h1, dite_false, h2]
     -- Now show the self-reference in d₁
     have hg'_self : (d₁ ⟨g'.val - 1, by omega⟩).2.1.1.val = n + (g'.val - 1) ∨
         (d₁ ⟨g'.val - 1, by omega⟩).2.1.2.val = n + (g'.val - 1) := by
@@ -1210,7 +1203,7 @@ theorem restriction_eliminates_two {n s : Nat} (d : CircDesc (n + 1) s)
           (elimGateD d_rb g₁ (.const c₁) ⟨g'.val - 1, hg'_bound2⟩).2.1.2.val = n + (g'.val - 1)
       simp only [elimGateD, hig, dite_false]
       have hgi : (⟨g'.val - 1 + 1, hg'_bound3⟩ : Fin (t + 3)) = g' := by
-        ext; simp only [Fin.val_mk]; omega
+        ext; dsimp only []; omega
       rw [hgi]
       -- Now need to show remapWireE maps one of the wires to self-ref
       -- Case split on which wire of d g' references g₁
@@ -1222,7 +1215,7 @@ theorem restriction_eliminates_two {n s : Nat} (d : CircDesc (n + 1) s)
           rw [hg'_rb_w1, hw1_ref]; omega
         simp only [remapWireE]
         -- (d_rb g').2.1.1.val = n + g₁.val ≥ n, so not < n
-        simp only [show ¬((d_rb g').2.1.1.val < n) from by omega, dite_false,
+        simp only [dite_false,
           show ((d_rb g').2.1.1.val = n + g₁.val) from hw1_rb, dite_true,
           show ¬(g'.val - 1 < g₁.val) from hig, ite_false, Fin.val_mk,
           show ¬(n + g₁.val < n) from by omega]
@@ -1265,7 +1258,7 @@ theorem restriction_eliminates_two {n s : Nat} (d : CircDesc (n + 1) s)
         intro x; rfl
       have heval_last : ∀ x, wireValD d₁ x ⟨n + (t + 1), by omega⟩ =
           wireValD d₁ x ⟨n + (g'.val - 1), by omega⟩ := by
-        intro x; congr 1; ext; simp only [Fin.val_mk]; omega
+        intro x; congr 1; ext; dsimp only []; omega
       rcases rd₂ with ⟨c₂⟩ | ⟨⟨w₂, hw₂⟩, f₂⟩
       · -- Constant redirect: evalD d₁ is constant, contradicting XOR non-constancy
         exfalso
@@ -1315,8 +1308,8 @@ theorem restriction_eliminates_two {n s : Nat} (d : CircDesc (n + 1) s)
           show wireValD (fun _ => (true, (⟨w₂, by omega⟩, ⟨w₂, by omega⟩), (false, false)))
             x ⟨n, by omega⟩ = _
           rw [wireValD]
-          simp only [show ¬(n < n) from by omega, dite_false, Fin.val_mk, hw₂n,
-            ite_true, Bool.xor_false, Bool.and_self]
+          simp only [show ¬(n < n) from by omega, dite_false, hw₂n,
+            ite_true, Bool.and_self]
           rw [wireValD]; simp only [hw₂n, dite_true]
           have hw₂_input : wireValD d₁ x ⟨w₂, by omega⟩ = x ⟨w₂, hw₂n⟩ := by
             rw [wireValD]; simp only [hw₂n, dite_true]
@@ -1363,27 +1356,25 @@ theorem restriction_eliminates_two {n s : Nat} (d : CircDesc (n + 1) s)
                 split
                 · -- Wire in bounds
                   rename_i h_in
-                  simp only [Fin.val_mk]
                   split
                   · -- < k: use IH
                     rename_i h_lt
                     congr 1; exact ih _ h_lt h_in
                   · -- ≥ k on left
-                    rename_i h_nlt
-                    simp only [h_nlt, ite_false]
+                    rfl
                 · -- Wire out of bounds: clamped to n + (k - n) = k
                   rename_i h_out
-                  simp only [Fin.val_mk, show ¬(n + (k - n) < k) from by omega, ite_false,
+                  simp only [show ¬(n + (k - n) < k) from by omega, ite_false,
                     show ¬(wi_d1.val < k) from by omega]
           refine ⟨j + 1, d₂, by omega, f₂.xor (comp.xor b_kill), by omega, fun x => ?_⟩
           simp only [evalD]
           have hfin_eq : (⟨n + (j + 1) - 1, by omega⟩ : Fin (n + (j + 1))) =
-              ⟨n + j, by omega⟩ := by ext; simp only [Fin.val_mk]; omega
+              ⟨n + j, by omega⟩ := by ext; dsimp only []; omega
           rw [hfin_eq, htrunc x ⟨n + j, by omega⟩]
           have : (⟨(⟨n + j, by omega⟩ : Fin (n + (j + 1))).val, by omega⟩ : Fin (n + (t + 2))) =
-              ⟨w₂, hw₂⟩ := by ext; simp only [Fin.val_mk]; omega
+              ⟨w₂, hw₂⟩ := by ext; dsimp only []; omega
           rw [this, hxor_at_w₂ x]
-/-! ## Section 8: The 2(N-1) Lower Bound -/
+/-! ## The 2(N-1) Lower Bound -/
 
 /-- Any DeMorgan circuit computing XOR_N (or complement) has ≥ 2N - 1 gates. -/
 theorem xor_lower_bound_2 (N s : Nat) (hs : 0 < s) (d : CircDesc N s) (comp : Bool)

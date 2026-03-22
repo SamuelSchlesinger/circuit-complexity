@@ -45,6 +45,11 @@ private lemma AONFor.mkGate_acyclic {N : Nat} (f : BitString N → Bool)
   · intro k; exact Fin.elim0 k
   · intro k; exact Nat.lt_of_lt_of_le k.isLt (Nat.le_add_right N _)
 
+/-- Single-output DNF circuit computing `f : BitString N → Bool`.
+
+For each of the `2^N` possible inputs `s`, internal gate `i` is the
+indicator AND for `s` when `f s = true`, or a trivially-false 0-input
+OR otherwise. The single output OR gate disjoins all internal gates. -/
 def AONFor {N : Nat} [NeZero N] (f : BitString N → Bool) :
     Circuit Basis.unboundedAON N 1 (2 ^ N) where
   gates := AONFor.mkGate f
@@ -71,7 +76,7 @@ private lemma AONFor_wireValue_gate {N : Nat} [NeZero N] (f : BitString N → Bo
 @[simp] private lemma AONFor_gates {N : Nat} [NeZero N] (f : BitString N → Bool) :
     (AONFor f).gates = AONFor.mkGate f := rfl
 
--- Helper lemmas for AONFor_is_Correct
+/-! ## Helper lemmas for AONFor correctness -/
 
 private lemma foldl_bor_eq_true (n : Nat) (g : Fin n → Bool) :
     (Fin.foldl n (fun acc i => acc || g i) false = true) ↔ (∃ i : Fin n, g i = true) := by
@@ -167,7 +172,7 @@ private lemma exists_testBit_encode (N : Nat) (x : BitString N) :
         · simp [Nat.zero_testBit])
       j
 
--- Main correctness theorem
+/-- The single-output DNF circuit correctly computes `f`. -/
 def AONFor_is_Correct {N : Nat} [NeZero N] (f : BitString N → Bool) :
     (fun (x : BitString 1) => x 0) ∘ (AONFor f).eval = f := by
   funext x
@@ -207,9 +212,7 @@ def AONFor_is_Correct {N : Nat} [NeZero N] (f : BitString N → Bool) :
       acc || (AONFor.mkGate f i).eval ((AONFor f).wireValue x)) false <;>
     simp_all
 
--- ============================================================
--- Multi-output DNF circuit: AONForM
--- ============================================================
+/-! ## Multi-output DNF circuit: AONForM -/
 
 /-- Internal gate for the multi-output DNF circuit.
 Gate `idx` encodes output bit `j = idx / 2^N` and indicator index `i = idx % 2^N`.
@@ -248,6 +251,11 @@ private lemma AONForM_output_bound {N M : Nat} (j : Fin M) (k : Fin (2 ^ N)) :
     _ = (j.val + 1) * 2 ^ N := by rw [Nat.add_mul]; simp
     _ ≤ M * 2 ^ N := Nat.mul_le_mul_right _ (by omega)
 
+/-- Multi-output DNF circuit computing `f : BitString N → BitString M`.
+
+For each output bit `j` and each of the `2^N` possible inputs, there is
+an indicator AND gate (or a trivially-false gate). Each output OR gate
+disjoins the `2^N` gates for its output bit. -/
 def AONForM {N M : Nat} [NeZero N] [NeZero M] (f : BitString N → BitString M) :
     Circuit Basis.unboundedAON N M (M * 2 ^ N) where
   gates := AONForM_mkGate f
@@ -322,7 +330,7 @@ private lemma AONForM_idx_j {N M : Nat} (j : Fin M) (k : Fin (2 ^ N)) :
     AONForM_j (AONForM_idx j k) = j :=
   AONForM_j_of_add j k _
 
--- Main correctness theorem
+/-- The multi-output DNF circuit correctly computes `f`. -/
 def AONForM_is_Correct {N M : Nat} [NeZero N] [NeZero M]
     (f : BitString N → BitString M) :
     (AONForM f).eval = f := by
