@@ -25,9 +25,7 @@ gates for `N ≥ 16`.
 
 namespace ShannonUpper
 
--- ════════════════════════════════════════════════════════════════
--- Section 1: Parameters
--- ════════════════════════════════════════════════════════════════
+/-! ## Parameters -/
 
 /-- Number of address variables: `⌊log₂ N⌋ - 1`. -/
 def addrBits (N : Nat) : Nat := Nat.log 2 N - 1
@@ -35,9 +33,7 @@ def addrBits (N : Nat) : Nat := Nat.log 2 N - 1
 /-- Number of data variables: `N - addrBits N`. -/
 def dataBits (N : Nat) : Nat := N - addrBits N
 
--- ════════════════════════════════════════════════════════════════
--- Section 2: Gate Construction Helpers
--- ════════════════════════════════════════════════════════════════
+/-! ## Gate Construction Helpers -/
 
 /-- Build a fan-in-2 gate bundled with an acyclicity proof. -/
 private def mkGate2' (op : AONOp) {W : Nat} (w₀ w₁ : Fin W) (n₀ n₁ : Bool)
@@ -65,9 +61,7 @@ private def gn (idx : Nat) {W : Nat} (g : Gate Basis.andOr2 W)
     (_ : idx < 2 := by omega) : Bool :=
   g.negated ⟨idx, by rw [andOr2_fanIn]; omega⟩
 
--- ════════════════════════════════════════════════════════════════
--- Section 2b: Binary Circuit Composition (fully proved)
--- ════════════════════════════════════════════════════════════════
+/-! ## Binary Circuit Composition -/
 
 /-- Gate + acyclicity proof for the binary composition, bundled as a subtype. -/
 private def binopGWP {N G₁ G₂ : Nat} [NeZero N]
@@ -115,9 +109,7 @@ def binopCircuit (op : AONOp) {N G₁ G₂ : Nat} [NeZero N]
       negated := fun _ => false }
   acyclic i k := (binopGWP c₁ c₂ i).property k
 
--- ════════════════════════════════════════════════════════════════
--- Section 3: Arithmetic
--- ════════════════════════════════════════════════════════════════
+/-! ## Arithmetic -/
 
 /-! ### Nat.log helpers -/
 
@@ -293,9 +285,7 @@ theorem shannon_size_le (N : Nat) (hN : 16 ≤ N) (G : Nat)
         apply Nat.mul_le_mul_right; exact hG
     _ ≤ 18 * 2 ^ N := shannon_arithmetic N hN
 
--- ════════════════════════════════════════════════════════════════
--- Section 4: Circuit Construction
--- ════════════════════════════════════════════════════════════════
+/-! ## Circuit Construction -/
 
 /-! ### Gate construction helper -/
 
@@ -394,7 +384,7 @@ private lemma treeLevel_parent (l m : Nat) (hl : 2 ≤ l) :
       (show 2 ^ l + m % 2 ^ l < 2 ^ (l + 1) by have := pow_double l; omega))
   · exact Nat.le_log_of_pow_le (by omega) (by omega)
 
-private lemma treePos_parent (l m : Nat) (hl : 2 ≤ l) :
+private lemma treePos_parent (l m : Nat) (_hl : 2 ≤ l) :
     treePos (treeParentIdx l m) (l - 1) = m % 2 ^ l := by
   show treeParentIdx l m - treeBase (l - 1) = m % 2 ^ l
   show treeBase (l - 1) + m % 2 ^ l - treeBase (l - 1) = m % 2 ^ l
@@ -426,9 +416,9 @@ theorem encodeCol_lt (k : Nat) (col : Fin (2^k) → Bool) :
     _ < 2 ^ (2^k) := sum_pow_two_lt (2^k)
 
 noncomputable def colFun (N : Nat) (f : BitString N → Bool)
-    (k q : Nat) (hkq : k + q = N) (y : Fin (2^q)) : Fin (2^k) → Bool :=
+    (k q : Nat) (_hkq : k + q = N) (y : Fin (2^q)) : Fin (2^k) → Bool :=
   fun a => f (fun idx =>
-    if h : idx.val < k then Nat.testBit a.val idx.val
+    if _ : idx.val < k then Nat.testBit a.val idx.val
     else Nat.testBit y.val (idx.val - k))
 
 noncomputable def colPatIdx (N : Nat) (f : BitString N → Bool)
@@ -961,7 +951,7 @@ private theorem wireValue_dataLeaf (N : Nat) [NeZero N]
       ·
         rw [dif_pos hjL1]
         simp only [mkG, Gate.eval, Basis.andOr2, AONOp.eval,
-          Fin.foldl_succ_last, Fin.foldl_zero, Bool.true_and, ite_self, Bool.false_xor]
+          Fin.foldl_succ_last, Fin.foldl_zero, Bool.true_and]
         simp only [Fin.val_last, Fin.val_castSucc, ite_true, ite_false,
           show ¬((1 : Nat) = 0) from by omega]
         rw [Circuit.wireValue_lt _ _ _ (show (⟨addrBits N, _⟩ : Fin _).val < N from by
@@ -994,13 +984,13 @@ private theorem wireValue_dataLeaf (N : Nat) [NeZero N]
               x ⟨addrBits N + ↑i, hfin_bound2 i⟩ = j.testBit ↑i) from
           decide_eq_decide.mpr hcast]
         simp only [Fin.forall_fin_two, Fin.val_zero, Fin.val_one,
-          show addrBits N + 0 = addrBits N from by omega, Nat.testBit_zero, htp]
+          show addrBits N + 0 = addrBits N from by omega, Nat.testBit_zero]
         cases x ⟨addrBits N, by omega⟩ <;> cases x ⟨addrBits N + 1, by omega⟩ <;>
           cases j.testBit 1 <;> cases (decide (j % 2 = 1)) <;> simp_all
       ·
         rw [dif_neg hjL1]
         simp only [mkG, Gate.eval, Basis.andOr2, AONOp.eval,
-          Fin.foldl_succ_last, Fin.foldl_zero, Bool.true_and, ite_self, Bool.false_xor]
+          Fin.foldl_succ_last, Fin.foldl_zero, Bool.true_and]
         simp only [Fin.val_last, Fin.val_castSucc, ite_true, ite_false,
           show ¬((1 : Nat) = 0) from by omega]
         have hl2 : 2 ≤ treeLevel j := treeLevel_ge_two j (by omega)
@@ -1350,8 +1340,7 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
       simp only [show N + oD k q + p * (2 ^ k - 1) + 0 - N =
         oD k q + p * (2 ^ k - 1) from by omega]
       rw [dif_neg h_ne0, dif_neg h_ge_oC, dif_neg h_ge_oD, dif_pos h_lt_oE]
-      simp only [show addrBits N = k from rfl, show dataBits N = q from rfl,
-        show colPatIdx N f k q (addrDataSum N hN) ⟨y, hy⟩ = p from rfl]
+      simp only [show addrBits N = k from rfl, show dataBits N = q from rfl]
       simp only [show oD k q + p * (2 ^ k - 1) - oD k q =
         p * (2 ^ k - 1) from by omega]
       simp_rw [show p * (2 ^ k - 1) % (2 ^ k - 1) = 0 from by
@@ -1388,8 +1377,7 @@ private theorem wireValue_colOutput (N : Nat) [NeZero N]
       simp only [show N + oD k q + p * (2 ^ k - 1) + (r' + 1) - N =
         oD k q + p * (2 ^ k - 1) + (r' + 1) from by omega]
       rw [dif_neg h_ne0', dif_neg h_ge_oC', dif_neg h_ge_oD', dif_pos h_lt_oE']
-      simp only [show addrBits N = k from rfl, show dataBits N = q from rfl,
-        show colPatIdx N f k q (addrDataSum N hN) ⟨y, hy⟩ = p from rfl]
+      simp only [show addrBits N = k from rfl, show dataBits N = q from rfl]
       simp_rw [show (oD k q + p * (2 ^ k - 1) + (r' + 1) - oD k q) =
         p * (2 ^ k - 1) + (r' + 1) from by omega]
       simp only [show (p * (2 ^ k - 1) + (r' + 1)) / (2 ^ k - 1) = p from
@@ -1465,7 +1453,7 @@ private theorem wireValue_orChain_sem (N : Nat) [NeZero N]
     rw [dif_pos (by unfold oF; omega :
       oE (addrBits N) (dataBits N) + y < oF (addrBits N) (dataBits N))]
     simp only [mkG, Gate.eval, Basis.andOr2, AONOp.eval,
-      Fin.foldl_succ_last, Fin.foldl_zero, Bool.false_and, Bool.true_and, ite_self, Bool.false_xor]
+      Fin.foldl_succ_last, Fin.foldl_zero, Bool.true_and, ite_self, Bool.false_xor]
     simp only [Fin.val_last, Fin.val_castSucc, ite_true, ite_false,
       show ¬((1 : Nat) = 0) from by omega,
       show oE (addrBits N) (dataBits N) + y - oE (addrBits N) (dataBits N) = y from by omega]
@@ -1502,7 +1490,7 @@ private theorem wireValue_orChain_sem (N : Nat) [NeZero N]
     simp only [show oF (addrBits N) (dataBits N) + 0 - oF (addrBits N) (dataBits N) = 0
       from by omega, ite_true,
       Fin.val_last, Fin.val_castSucc, ite_false,
-      show (0 : Nat) = 0 from rfl, show ¬((1 : Nat) = 0) from by omega,
+      show ¬((1 : Nat) = 0) from by omega,
       show (0 : Nat) + 1 = 1 from by omega]
     show ((shannonCircuit N f hN).wireValue x
         ⟨N + oE (addrBits N) (dataBits N) + 0, by linarith⟩ ||
@@ -1625,7 +1613,7 @@ private theorem shannonCircuit_correct (N : Nat) [NeZero N]
   simp only [Bool.false_xor, Bool.or_self]
   exact shannon_lastWire_correct N f hN x
 
-private theorem szSections_le_bound (N : Nat) (hN : 16 ≤ N) :
+private theorem szSections_le_bound (N : Nat) (_hN : 16 ≤ N) :
     szSections (addrBits N) (dataBits N) + 1 ≤
       4 * 2 ^ dataBits N + 2 * 2 ^ addrBits N + 2 ^ (2 ^ addrBits N + addrBits N) := by
   unfold szSections
@@ -1651,9 +1639,7 @@ theorem shannon_assembly (N : Nat) [NeZero N] (hN : 16 ≤ N)
     funext (shannonCircuit_correct N f hN),
     szSections_le_bound N hN⟩
 
--- ════════════════════════════════════════════════════════════════
--- Section 5: Main Theorem
--- ════════════════════════════════════════════════════════════════
+/-! ## Main Theorem -/
 
 /-- **Shannon circuit construction**: For `N ≥ 16`, every Boolean function
     has a fan-in-2 AND/OR circuit of size `≤ 18 · 2^N / N`. -/

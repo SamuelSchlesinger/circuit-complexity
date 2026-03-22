@@ -159,7 +159,6 @@ def padDesc {N s : Nat} (d : CircDesc N s) (s' : Nat) (hs : 0 < s) (h : s ≤ s'
     -- Copy gate: OR(last_original_output, last_original_output)
     (false, (⟨N + s - 1, by omega⟩, ⟨N + s - 1, by omega⟩), (false, false))
 
-/-- Padding preserves evaluation. -/
 -- Helper: wireValD agrees on original wires
 private theorem wireValD_padDesc_lt {N s s' : Nat} (d : CircDesc N s) (hs : 0 < s)
     (h : s ≤ s') (x : BitString N) (w : Fin (N + s')) (hw : w.val < N + s) :
@@ -200,6 +199,7 @@ private theorem wireValD_padDesc_ge {N s s' : Nat} (d : CircDesc N s) (hs : 0 < 
   have hlt : N + s - 1 < N + s := by omega
   exact wireValD_padDesc_lt d hs h x ⟨N + s - 1, by omega⟩ hlt
 
+/-- Padding preserves evaluation. -/
 theorem evalD_padDesc {N s s' : Nat} (d : CircDesc N s) (hs : 0 < s)
     (h : s ≤ s') (hs' : 0 < s') :
     evalD hs' (padDesc d s' hs h) = evalD hs d := by

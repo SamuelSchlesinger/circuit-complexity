@@ -18,7 +18,7 @@ establishes the circuit size complexity measure for Boolean functions.
 * `Circuit.size_complexity_pos` — for complete bases, size complexity is positive
 -/
 
-/-- A BitString of length n. -/
+/-- A BitString of length `n`. -/
 abbrev BitString n := Fin n → Bool
 
 /-- Arity constraint for operations in a basis. -/
@@ -28,7 +28,7 @@ inductive Arity where
   | upto (k : Nat)
   deriving Repr, DecidableEq
 
-/-- Whether `n` inputs satisfies an arity constraint. -/
+/-- Whether `n` satisfies an arity constraint. -/
 def Arity.satisfiedBy : Arity → Nat → Prop
   | .unbounded, _ => True
   | .exactly k, n => n = k

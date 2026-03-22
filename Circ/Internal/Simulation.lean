@@ -23,9 +23,7 @@ gates followed by chains for all original output gates. The new output gates
 are trivial passthroughs reading the last wire of each output chain.
 -/
 
--- ═══════════════════════════════════════════════════════════════
--- AONOp extensions (outside CompileAON namespace for dot notation)
--- ═══════════════════════════════════════════════════════════════
+/-! ## AONOp extensions -/
 
 /-- Dual operation: swaps AND ↔ OR. Used for constant-gate construction. -/
 def AONOp.dual : AONOp → AONOp
@@ -80,9 +78,7 @@ lemma AONOp.eval_one (op : AONOp) (v : Fin 1 → Bool) :
 
 namespace CompileAON
 
--- ═══════════════════════════════════════════════════════════════
--- Section 1: Chain length and prefix sums
--- ═══════════════════════════════════════════════════════════════
+/-! ## Chain length and prefix sums -/
 
 /-- Number of fan-in-2 gates needed to simulate one gate with `k` inputs. -/
 def chainLen (k : Nat) : Nat := if k ≤ 1 then 1 else k - 1
@@ -112,9 +108,7 @@ lemma prefixSum_mono (f : Nat → Nat) {i j : Nat} (h : i ≤ j) :
   | refl => exact Nat.le.refl
   | step _ ih => rw [prefixSum_succ]; omega
 
--- ═══════════════════════════════════════════════════════════════
--- Section 2: Segment lookup
--- ═══════════════════════════════════════════════════════════════
+/-! ## Segment lookup -/
 
 /-- Given a flat index into a segmented array, find the segment and position. -/
 def segLookup (n : Nat) (f : Nat → Nat) (idx : Nat) (h : idx < prefixSum f n) :
@@ -158,9 +152,7 @@ lemma segLookup_sum (n : Nat) (f : Nat → Nat) (idx : Nat) (h : idx < prefixSum
     · rename_i h'
       dsimp only; omega
 
--- ═══════════════════════════════════════════════════════════════
--- Section 3: Wire layout definitions
--- ═══════════════════════════════════════════════════════════════
+/-! ## Wire layout definitions -/
 
 variable {N M G : Nat} [NeZero N] [NeZero M]
 
@@ -213,9 +205,7 @@ lemma oOffset_chain_le_G' (c : Circuit Basis.unboundedAON N M G) {j : Nat} (hj :
     _ = prefixSum (oChainF c) (j + 1) := (prefixSum_succ _ _).symm
     _ ≤ prefixSum (oChainF c) M := prefixSum_mono _ (by omega)
 
--- ═══════════════════════════════════════════════════════════════
--- Section 4: Wire remapping
--- ═══════════════════════════════════════════════════════════════
+/-! ## Wire remapping -/
 
 /-- Map an old wire index to its new position. Input wires are unchanged;
     internal gate `i` maps to the last gate of its chain. -/
@@ -265,9 +255,7 @@ lemma remapWire_lt_oOffset (c : Circuit Basis.unboundedAON N M G) (w : Fin (N + 
   have : iOffset c G = iTotal c := rfl
   unfold oOffset at *; omega
 
--- ═══════════════════════════════════════════════════════════════
--- Section 5: Chain gate construction
--- ═══════════════════════════════════════════════════════════════
+/-! ## Chain gate construction -/
 
 /-- Helper: construct a function `Fin 2 → α` from two values. -/
 def fin2 (a b : α) : Fin 2 → α := fun i => if i.val = 0 then a else b
@@ -332,9 +320,7 @@ private lemma mkChainInputs_lt {W : Nat} (hW : 0 < W) (k : Nat)
     · dsimp only; omega
     · exact Nat.lt_of_lt_of_le (hri_lt _) (Nat.le_add_right _ _)
 
--- ═══════════════════════════════════════════════════════════════
--- Section 6: Compiled circuit
--- ═══════════════════════════════════════════════════════════════
+/-! ## Compiled circuit -/
 
 /-- Input wires for the compiled gate at flat index `idx`. -/
 private def compileGateInputs (c : Circuit Basis.unboundedAON N M G) (idx : Fin (G' c)) :
@@ -460,9 +446,7 @@ def compileFn (c : Circuit Basis.unboundedAON N M G) : Circuit Basis.andOr2 N M 
         hri_lt (by rw [hoOff]; omega) k
       exact Nat.lt_of_lt_of_le hlt (by omega)
 
--- ═══════════════════════════════════════════════════════════════
--- Section 7: Eval equivalence
--- ═══════════════════════════════════════════════════════════════
+/-! ## Eval equivalence -/
 
 /-- `segLookup` inverts `prefixSum`: if `idx = prefixSum f i + j` and `j < f i`,
     then `segLookup` returns `(i, j)`. -/
