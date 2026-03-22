@@ -46,20 +46,17 @@ theorem shannon_size_complexity (N : Nat) [NeZero N] (hN : 6 ≤ N)
   have : c.size ≤ 2 ^ N / (5 * N) := hs ▸ hle
   exact hf G c (by rw [Circuit.size] at this; omega) hc
 
-/-- **Shannon upper bound**: there exists an explicit constant `C` such that
-    for sufficiently large `N`, every Boolean function on `N` inputs can be
-    computed by a fan-in-2 AND/OR circuit of size at most `C * 2^N / N`.
+/-- **Shannon upper bound**: for `N ≥ 16`, every Boolean function on `N`
+    inputs has fan-in-2 AND/OR circuit complexity at most `18 · 2^N / N`.
 
     Combined with `shannon_size_complexity`, this gives `Θ(2^N / N)`.
 
     This is the full-column-library variant (C = 18). The tighter
     `(1 + o(1)) · 2^N / N` bound due to Lupanov (1958) uses column
     grouping and is not yet formalized. -/
-theorem shannon_upper_bound [CompleteBasis Basis.andOr2] :
-    ∃ C : Nat, ∃ N₀ : Nat, ∀ N : Nat, N₀ ≤ N → ∀ [NeZero N],
-      ∀ f : BitString N → Bool,
-        Circuit.size_complexity Basis.andOr2 f ≤ C * 2 ^ N / N := by
-  refine ⟨18, 16, fun N hN => ?_⟩
-  intro; intro f
+theorem shannon_upper_bound [CompleteBasis Basis.andOr2]
+    (N : Nat) (hN : 16 ≤ N) [NeZero N]
+    (f : BitString N → Bool) :
+    Circuit.size_complexity Basis.andOr2 f ≤ 18 * 2 ^ N / N := by
   obtain ⟨G, c, heval, hsize⟩ := ShannonUpper.shannon_construction N hN f
   exact le_trans (Circuit.size_complexity_le c f heval) hsize
