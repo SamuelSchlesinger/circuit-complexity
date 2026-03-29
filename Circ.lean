@@ -7,6 +7,7 @@ import Circ.Shannon
 import Circ.LowerBound
 import Circ.Schnorr
 import Circ.AC0
+import Circ.Nondeterminism
 
 /-! # Circuit Complexity Library
 
@@ -43,6 +44,11 @@ is the minimum size of any circuit computing it.
   `CNF.xorBool_complexity_lb`): Any DNF (resp. CNF) computing N-input XOR
   requires at least `2^{N-1}` terms (resp. clauses).
 
+* **Nondeterministic quantification** (`existQuantify_complexity_le`):
+  If `f` has circuit complexity `s`, then `∃ x ∈ {0,1}^k, f(x,y)` has
+  circuit complexity at most `2^k · (s + 1)`.  Combined with the Shannon
+  upper bound (`existQuantify_complexity_min`).
+
 ## Module structure
 
 Public modules (definitions a reviewer should read):
@@ -55,6 +61,7 @@ Public modules (definitions a reviewer should read):
 * `Circ.XOR` — `Schnorr.xorBool` (N-input parity)
 * `Circ.EssentialInput` — `IsEssentialInput`, `EssentialInputs`
 * `Circ.AC0.Defs` — `InAC0`
+* `Circ.Nondeterminism.Defs` — `existQuantify`, `forallQuantify`
 
 Theorem modules (re-export definitions + main results):
 
@@ -62,6 +69,7 @@ Theorem modules (re-export definitions + main results):
 * `Circ.Shannon` — Shannon counting lower bound
 * `Circ.LowerBound` — gate elimination lower bound
 * `Circ.Schnorr` — Schnorr's XOR lower bound
+* `Circ.Nondeterminism` — nondeterministic quantification complexity bounds
 
 Internal modules contain proof machinery (CircDesc, DNF construction,
 restriction/elimination arguments) and are not intended for direct use.
