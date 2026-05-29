@@ -8,6 +8,7 @@ import Circ.LowerBound
 import Circ.Schnorr
 import Circ.AC0
 import Circ.Nondeterminism
+import Circ.Valiant
 
 /-! # Circuit Complexity Library
 
